@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Dự án & Công việc (Cloud Firebase & Google Auth)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc, query, where, or } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyArB7TKdMEZe1m8P3KQE9oDsQa3VR28G_M",
+            authDomain: "project-management-e6e99.firebaseapp.com",
+            projectId: "project-management-e6e99",
+            storageBucket: "project-management-e6e99.firebasestorage.app",
+            messagingSenderId: "586044974271",
+            appId: "1:586044974271:web:df3664fc298ff9a2d1520a",
+            measurementId: "G-NY0X9Z771S"
+        };
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            const db = initializeFirestore(app, {}, "default");
+            const auth = getAuth(app);
+            const provider = new GoogleAuthProvider();
+
+            window.db = db;
+            window.auth = auth;
+            window.provider = provider;
+            window.signInWithPopup = signInWithPopup;
+            window.signOut = signOut;
+            window.collection = collection;
+            window.getDocs = getDocs;
+            window.setDoc = setDoc;
+            window.doc = doc;
+            window.deleteDoc = deleteDoc;
+            window.query = query;
+            window.where = where;
+            window.or = or;
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    window.currentUser = user;
+                    document.getElementById('auth-screen').classList.add('hidden');
+                    document.getElementById('app-screen').classList.remove('hidden');
+                    window.initFirebaseData();
+                } else {
+                    window.currentUser = null;
+                    document.getElementById('auth-screen').classList.remove('hidden');
+                    document.getElementById('app-screen').classList.add('hidden');
+                }
+            });
+        } catch (err) {
+            console.error("Lỗi khởi tạo Firebase:", err);
+        }
+    </script>
+
+    <style>
+        @media print {
+            body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            aside, button, input[type="text"], select, textarea { border: none !important; box-shadow: none !important; }
+            .no-print { display: none !important; }
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+
+    <div id="auth-screen" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center border border-slate-100">
+            <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-5 text-2xl shadow-inner">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900 mb-2">Không Gian Làm Việc Cloud</h1>
+            <p class="text-slate-500 text-sm mb-8">Quản lý dự án, công việc và cộng tác nhóm thông minh với tài khoản Google của bạn.</p>
+            <button onclick="window.signInWithPopup(window.auth, window.provider)" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3.5 px-6 rounded-2xl transition shadow-lg shadow-indigo-200 flex items-center justify-center gap-3 cursor-pointer">
+                <i class="fa-brands fa-google text-lg"></i> Đăng nhập bằng Google
+            </button>
+        </div>
+    </div>
+
+    <div id="app-screen" class="hidden flex flex-col md:flex-row h-screen overflow-hidden">
+        
+        <aside class="w-full md:w-80 bg-white border-b md:border-r border-slate-200 flex flex-col justify-between no-print shrink-0 max-h-52 md:max-h-full">
+            <div>
+                <div class="p-3 md:p-4 border-b border-slate-200 flex items-center justify-between">
+                    <div class="flex items-center gap-2 truncate pr-2">
+                        <img id="user-avatar" src="" class="w-7 h-7 rounded-full border border-slate-200 object-cover" alt="Avatar">
+                        <span id="user-name" class="font-bold text-xs md:text-sm text-slate-800 truncate">User</span>
+                    </div>
+                    <button onclick="window.signOut(window.auth)" class="text-slate-400 hover:text-red-500 p-1.5 rounded-lg transition cursor-pointer" title="Đăng xuất">
+                        <i class="fa-solid fa-right-from-bracket text-sm"></i>
+                    </button>
+                </div>
+                <div class="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h2 class="font-bold text-xs uppercase text-slate-500 tracking-wider">Dự án của bạn</h2>
+                    <button onclick="addNewProject()" class="bg-indigo-600 hover:bg-indigo-700 text-white w-7 h-7 rounded-full flex items-center justify-center transition shadow-sm cursor-pointer" title="Thêm dự án mới">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                    </button>
+                </div>
+                <div id="project-list" class="p-2 space-y-1 overflow-y-auto max-h-32 md:max-h-[calc(100vh-190px)]">
+                    <div class="text-center py-4 text-slate-400 text-xs">Đang tải dữ liệu...</div>
+                </div>
+            </div>
+            <div class="hidden md:flex p-3 border-t border-slate-200 text-[11px] text-indigo-600 font-medium items-center justify-between bg-indigo-50/50">
+                <span><i class="fa-solid fa-rotate animate-spin mr-1"></i> Đã đồng bộ Cloud</span>
+                <button onclick="requestNotificationPermission()" class="bg-indigo-600 text-white px-2 py-0.5 rounded hover:bg-indigo-700 transition cursor-pointer">Bật thông báo 🔔</button>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col h-full overflow-y-auto bg-slate-50" id="main-content">
+            <div class="flex-1 flex items-center justify-center text-slate-400 p-6 text-center">
+                <p>Đang tải dữ liệu dự án...</p>
+            </div>
+        </main>
+
+    </div>
+
+    <script>
+        let projects = [];
+        let currentProjectId = null;
+        let currentTab = 'tasks';
+
+        function playNotificationSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.6);
+            } catch (e) {
+                console.log("Không thể phát âm thanh:", e);
+            }
+        }
+
+        function requestNotificationPermission() {
+            if ("Notification" in window) {
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        new Notification("Đã bật thông báo!", { body: "Bạn sẽ nhận được thông báo khi có công việc đến deadline." });
+                    }
+                });
+            }
+        }
+
+        function getTodayDisplay() {
+            const d = new Date();
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        }
+
+        function checkTaskDeadlines() {
+            const todayStr = getTodayDisplay();
+            let dueCount = 0;
+            let dueDetails = [];
+
+            projects.forEach(proj => {
+                if (proj.tasks) {
+                    proj.tasks.forEach(task => {
+                        // Bỏ qua không tính thông báo nếu trạng thái là "Chờ phản hồi" hoặc "Final"
+                        const st = task.status || 'Ver 1';
+                        if (st === 'Final' || st === 'Chờ phản hồi') return;
+
+                        if (task.deadline === todayStr) {
+                            dueCount++;
+                            dueDetails.push(`• [${proj.name}] ${task.name}`);
+                        }
+                    });
+                }
+            });
+
+            if (dueCount > 0) {
+                document.title = `(${dueCount}) 🔔 Có Deadline Hôm Nay!`;
+                if ("Notification" in window && Notification.permission === "granted") {
+                    const key = "notified_" + todayStr;
+                    if (!sessionStorage.getItem(key)) {
+                        new Notification(`⏰ Có ${dueCount} công việc đến hạn hôm nay!`, { body: dueDetails.join("\n") });
+                        playNotificationSound();
+                        sessionStorage.setItem(key, "true");
+                    }
+                }
+            } else {
+                document.title = `Quản lý Dự án & Công việc (Cloud)`;
+            }
+        }
+
+        window.initFirebaseData = async function() {
+            if (!window.currentUser) return;
+            
+            document.getElementById('user-avatar').src = window.currentUser.photoURL || 'https://via.placeholder.com/150';
+            document.getElementById('user-name').innerText = window.currentUser.displayName || window.currentUser.email;
+
+            try {
+                const userEmail = window.currentUser.email;
+                const q = window.query(
+                    window.collection(window.db, "projects"),
+                    window.or(
+                        window.where("ownerEmail", "==", userEmail),
+                        window.where("sharedEmails", "array-contains", userEmail)
+                    )
+                );
+
+                const querySnapshot = await window.getDocs(q);
+                projects = [];
+                querySnapshot.forEach((docSnap) => {
+                    projects.push({ id: docSnap.id, ...docSnap.data() });
+                });
+
+                if (projects.length === 0) {
+                    const defaultProj = {
+                        id: "proj_" + Date.now(),
+                        name: 'Dự án MIK HẠ TẦNG',
+                        ownerEmail: userEmail,
+                        sharedEmails: [],
+                        members: 'Ngọt, Phanh, Thắng',
+                        startDate: getTodayDisplay(),
+                        deadline: '30/06/2026',
+                        tasks: [
+                            { 
+                                id: 101, 
+                                name: 'Kịch bản', 
+                                assignee: 'Ngọt, Phanh', 
+                                startDate: getTodayDisplay(),
+                                deadline: getTodayDisplay(), 
+                                urgency: 'Cao', 
+                                status: 'Ver 1',
+                                progressNote: 'Đang triển khai',
+                                cost: 5000000,
+                                links: [{ id: 1, title: 'Kịch bản chi tiết', url: 'https://drive.google.com' }],
+                                issue: '',
+                                solution: ''
+                            }
+                        ]
+                    };
+                    await window.setDoc(window.doc(window.db, "projects", defaultProj.id), defaultProj);
+                    projects.push(defaultProj);
+                }
+
+                currentProjectId = currentProjectId || projects[0].id;
+                renderApp();
+            } catch (error) {
+                console.error("Lỗi tải Firebase:", error);
+            }
+        };
+
+        async function saveData() {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (proj) {
+                try {
+                    await window.setDoc(window.doc(window.db, "projects", String(proj.id)), proj);
+                    checkTaskDeadlines();
+                } catch (error) {
+                    console.error("Lỗi lưu dữ liệu:", error);
+                }
+            }
+        }
+
+        async function addNewProject() {
+            const newProj = {
+                id: "proj_" + Date.now(),
+                name: 'Dự án mới chưa đặt tên',
+                ownerEmail: window.currentUser.email,
+                sharedEmails: [],
+                members: 'Chưa có thành viên',
+                startDate: getTodayDisplay(),
+                deadline: '31/12/2026',
+                tasks: []
+            };
+            projects.push(newProj);
+            currentProjectId = newProj.id;
+            await saveData();
+            renderApp();
+        }
+
+        async function updateProjectInfo(field, value) {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (proj) {
+                proj[field] = value;
+                await saveData();
+                renderProjectList();
+                renderMainContent();
+            }
+        }
+
+        async function updateSharedEmails(value) {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (proj) {
+                const emails = value.split(',').map(e => e.trim()).filter(e => e !== '');
+                proj.sharedEmails = emails;
+                await saveData();
+            }
+        }
+
+        async function deleteProject(id, event) {
+            event.stopPropagation();
+            const proj = projects.find(p => p.id === id);
+            if (proj && proj.ownerEmail !== window.currentUser.email) {
+                alert("Bạn chỉ có thể rời khỏi hoặc chủ dự án mới có quyền xóa dự án này!");
+                return;
+            }
+            if(confirm('Bạn có chắc muốn xóa dự án này?')) {
+                try {
+                    await window.deleteDoc(window.doc(window.db, "projects", String(id)));
+                    projects = projects.filter(p => p.id !== id);
+                    currentProjectId = projects.length > 0 ? projects[0].id : null;
+                    renderApp();
+                } catch (error) {
+                    console.error("Lỗi xóa dự án:", error);
+                }
+            }
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            renderMainContent();
+        }
+
+        async function addNewTask() {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (!proj) return;
+
+            const today = getTodayDisplay();
+            if (!proj.tasks) proj.tasks = [];
+            
+            proj.tasks.push({
+                id: Date.now(),
+                name: 'Công việc mới',
+                assignee: 'Chưa phân công',
+                startDate: today,
+                deadline: today,
+                urgency: 'Thấp',
+                status: 'Ver 1',
+                progressNote: '',
+                cost: 0,
+                links: [],
+                issue: '',
+                solution: ''
+            });
+            await saveData();
+            renderMainContent();
+        }
+
+        async function updateTask(taskId, field, value) {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (!proj) return;
+            const task = proj.tasks.find(t => t.id === taskId);
+            if (task) {
+                if (field === 'cost') task[field] = parseFloat(value) || 0;
+                else task[field] = value;
+                await saveData();
+                renderMainContent();
+            }
+        }
+
+        function handleDateInput(el, nextId, prevId) {
+            let val = el.value.replace(/\D/g, '');
+            let maxLen = parseInt(el.getAttribute('maxlength')) || 2;
+            if (val.length > maxLen) val = val.slice(0, maxLen);
+            el.value = val;
+            if (val.length === maxLen && nextId) document.getElementById(nextId)?.focus();
+            triggerAssembleDate(el);
+        }
+
+        function handleDateKeydown(e, prevId) {
+            if (e.key === 'Backspace' && e.target.value.length === 0 && prevId) document.getElementById(prevId)?.focus();
+        }
+
+        function triggerAssembleDate(el) {
+            const container = el.closest('.date-picker-group');
+            if (!container) return;
+            const d = container.querySelector('.d-input').value.padStart(2, '0');
+            const m = container.querySelector('.m-input').value.padStart(2, '0');
+            const y = container.querySelector('.y-input').value;
+            const hiddenTarget = container.querySelector('.hidden-target');
+
+            if (d.length === 2 && m.length === 2 && y.length === 4) {
+                let fullDate = `${d}/${m}/${y}`;
+                if (hiddenTarget.value !== fullDate) {
+                    hiddenTarget.value = fullDate;
+                    hiddenTarget.dispatchEvent(new Event('change'));
+                }
+            }
+        }
+
+        async function deleteTask(taskId) {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (!proj) return;
+            proj.tasks = proj.tasks.filter(t => t.id !== taskId);
+            await saveData();
+            renderMainContent();
+        }
+
+        async function addLinkToTask(taskId) {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (!proj) return;
+            const task = proj.tasks.find(t => t.id === taskId);
+            if (task) {
+                if (!task.links) task.links = [];
+                const title = prompt("Nhập tên hiển thị cho tài liệu/link:");
+                if (!title || title.trim() === '') return;
+                const url = prompt("Nhập đường dẫn (URL) của tài liệu/link:");
+                if (url && url.trim() !== '') {
+                    task.links.push({ id: Date.now(), title: title.trim(), url: url.trim() });
+                    await saveData();
+                    renderMainContent();
+                }
+            }
+        }
+
+        async function removeLinkFromTask(taskId, linkId) {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (!proj) return;
+            const task = proj.tasks.find(t => t.id === taskId);
+            if (task && task.links) {
+                task.links = task.links.filter(l => l.id !== linkId);
+                await saveData();
+                renderMainContent();
+            }
+        }
+
+        function exportProjectReport() { window.print(); }
+
+        function renderCustomDateInput(dateStr, onChangeJsCode, uniquePrefix) {
+            let parts = (dateStr || '').split('/');
+            let d = parts[0] || '';
+            let m = parts[1] || '';
+            let y = parts[2] || '';
+
+            return `
+                <div class="date-picker-group inline-flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 shadow-sm">
+                    <input type="text" value="${d}" placeholder="DD" maxlength="2" inputmode="numeric"
+                        oninput="handleDateInput(this, 'm_${uniquePrefix}', null)" onkeydown="handleDateKeydown(event, null)"
+                        class="d-input w-6 text-center bg-transparent focus:outline-none text-xs md:text-sm font-semibold text-slate-800">
+                    <span class="text-slate-400 font-bold px-0.5">/</span>
+                    <input type="text" value="${m}" placeholder="MM" maxlength="2" inputmode="numeric"
+                        oninput="handleDateInput(this, 'y_${uniquePrefix}', 'd_${uniquePrefix}')" onkeydown="handleDateKeydown(event, 'd_${uniquePrefix}')"
+                        class="m-input w-6 text-center bg-transparent focus:outline-none text-xs md:text-sm font-semibold text-slate-800">
+                    <span class="text-slate-400 font-bold px-0.5">/</span>
+                    <input type="text" value="${y}" placeholder="YYYY" maxlength="4" inputmode="numeric"
+                        oninput="handleDateInput(this, null, 'm_${uniquePrefix}')" onkeydown="handleDateKeydown(event, 'm_${uniquePrefix}')"
+                        class="y-input w-10 text-center bg-transparent focus:outline-none text-xs md:text-sm font-semibold text-slate-800">
+                    
+                    <input type="text" class="hidden-target hidden" value="${dateStr || ''}" onchange="${onChangeJsCode}">
+                    
+                    <div class="relative ml-1.5 pl-1.5 border-l border-slate-200">
+                        <input type="date" onchange="const p = this.parentElement.parentElement; const t = p.querySelector('.hidden-target'); t.value = yyyyMmDdToDdMmYyyy(this.value); t.dispatchEvent(new Event('change'));" 
+                            title="Bấm để chọn lịch" class="absolute opacity-0 w-full h-full cursor-pointer inset-0">
+                        <i class="fa-regular fa-calendar text-indigo-600 text-xs"></i>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderProjectList() {
+            const listEl = document.getElementById('project-list');
+            listEl.innerHTML = '';
+
+            if (!projects || projects.length === 0) {
+                listEl.innerHTML = `<div class="text-center py-4 text-slate-400 text-xs">Chưa có dự án nào.</div>`;
+                return;
+            }
+
+            const todayStr = getTodayDisplay();
+
+            projects.forEach(proj => {
+                const isActive = proj.id === currentProjectId;
+                let projDueCount = 0;
+                if (proj.tasks) {
+                    proj.tasks.forEach(t => { 
+                        const st = t.status || 'Ver 1';
+                        if (t.deadline === todayStr && st !== 'Final' && st !== 'Chờ phản hồi') projDueCount++; 
+                    });
+                }
+
+                const badgeHtml = projDueCount > 0 ? `<span class="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full ml-1 animate-bounce">${projDueCount}</span>` : '';
+                const isShared = proj.ownerEmail !== window.currentUser.email ? `<i class="fa-solid fa-users text-[10px] text-indigo-500 ml-1" title="Dự án chia sẻ"></i>` : '';
+
+                const item = document.createElement('div');
+                item.className = `group flex items-center justify-between p-2.5 md:p-3 rounded-xl cursor-pointer transition ${isActive ? 'bg-indigo-50 text-indigo-900 font-semibold shadow-sm' : 'hover:bg-slate-100 text-slate-600'}`;
+                item.onclick = () => { currentProjectId = proj.id; renderApp(); };
+
+                item.innerHTML = `
+                    <div class="truncate flex-1 pr-2">
+                        <div class="text-xs md:text-sm font-medium truncate flex items-center">
+                            ${proj.name} ${isShared} ${badgeHtml}
+                        </div>
+                        <div class="text-[10px] md:text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                            <i class="fa-regular fa-clock text-[9px]"></i> ĐT: ${proj.deadline || 'Chưa có'}
+                        </div>
+                    </div>
+                    <button onclick="deleteProject('${proj.id}', event)" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-1 transition cursor-pointer">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        function renderMainContent() {
+            const mainEl = document.getElementById('main-content');
+            const proj = projects.find(p => p.id === currentProjectId);
+
+            if (!proj) {
+                mainEl.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 text-center"><p class="text-sm">Chọn một dự án ở trên hoặc tạo mới để bắt đầu.</p></div>`;
+                return;
+            }
+
+            if (!proj.tasks) proj.tasks = [];
+            let tabContentHtml = '';
+            const todayStr = getTodayDisplay();
+
+            if (currentTab === 'tasks') {
+                let tasksHtml = '';
+                if (proj.tasks.length === 0) {
+                    tasksHtml = `<tr><td colspan="8" class="text-center py-8 text-slate-400 italic text-xs">Chưa có đầu mục công việc nào.</td></tr>`;
+                } else {
+                    proj.tasks.forEach(task => {
+                        let urgencyClass = 'bg-slate-100 text-slate-700';
+                        if (task.urgency === 'Cao') urgencyClass = 'bg-red-100 text-red-700 font-semibold';
+                        else if (task.urgency === 'Trung bình') urgencyClass = 'bg-amber-100 text-amber-700';
+                        else if (task.urgency === 'Thấp') urgencyClass = 'bg-green-100 text-green-700';
+
+                        let statusClass = 'bg-slate-100 text-slate-700';
+                        const st = task.status || 'Ver 1';
+                        if (st === 'Final') statusClass = 'bg-emerald-100 text-emerald-800 font-bold';
+                        else if (st === 'Chờ phản hồi') statusClass = 'bg-amber-100 text-amber-800 font-bold';
+                        else if (st.startsWith('Ver')) statusClass = 'bg-blue-50 text-blue-700';
+                        else if (st === 'Chờ sản xuất') statusClass = 'bg-purple-100 text-purple-800';
+                        else if (st === 'Pending') statusClass = 'bg-rose-100 text-rose-800';
+
+                        let deadlineBadge = (task.deadline === todayStr && st !== 'Final' && st !== 'Chờ phản hồi') ? `<span class="ml-1 px-1.5 py-0.5 text-[9px] bg-amber-100 text-amber-700 rounded font-bold animate-pulse">Hôm nay 🔔</span>` : '';
+
+                        let linksHtml = '';
+                        if (task.links) {
+                            task.links.forEach((l) => {
+                                linksHtml += `<div class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[11px] px-2 py-0.5 rounded border border-indigo-200 mr-1 mb-1"><a href="${l.url}" target="_blank" class="hover:underline truncate max-w-[120px] font-medium">${l.title}</a><button onclick="removeLinkFromTask(${task.id}, ${l.id})" class="text-indigo-400 hover:text-red-500 ml-0.5 cursor-pointer"><i class="fa-solid fa-xmark"></i></button></div>`;
+                            });
+                        }
+
+                        tasksHtml += `
+                            <tr class="hover:bg-slate-50 transition border-b border-slate-100 align-top text-xs md:text-sm">
+                                <td class="p-2 md:p-3"><input type="text" value="${task.name}" onchange="updateTask(${task.id}, 'name', this.value)" class="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none py-1 text-slate-800 font-medium"></td>
+                                <td class="p-2 md:p-3"><input type="text" value="${task.assignee}" onchange="updateTask(${task.id}, 'assignee', this.value)" class="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none py-1 text-slate-600 text-xs"></td>
+                                <td class="p-2 md:p-3"><div class="flex items-center gap-1 flex-wrap">${renderCustomDateInput(task.deadline, `updateTask(${task.id}, 'deadline', this.value)`, `task_${task.id}`)}${deadlineBadge}</div></td>
+                                <td class="p-2 md:p-3"><select onchange="updateTask(${task.id}, 'urgency', this.value)" class="text-[11px] px-2 py-1 rounded-lg border border-slate-200 ${urgencyClass}"><option value="Thấp" ${task.urgency === 'Thấp' ? 'selected' : ''}>Thấp</option><option value="Trung bình" ${task.urgency === 'Trung bình' ? 'selected' : ''}>Trung bình</option><option value="Cao" ${task.urgency === 'Cao' ? 'selected' : ''}>Cao</option></select></td>
+                                <td class="p-2 md:p-3"><select onchange="updateTask(${task.id}, 'status', this.value)" class="text-[11px] px-2 py-1 rounded-lg border border-slate-200 ${statusClass}"><option value="Ver 1" ${st === 'Ver 1' ? 'selected' : ''}>Ver 1</option><option value="Ver 2" ${st === 'Ver 2' ? 'selected' : ''}>Ver 2</option><option value="Ver 3" ${st === 'Ver 3' ? 'selected' : ''}>Ver 3</option><option value="Ver 4" ${st === 'Ver 4' ? 'selected' : ''}>Ver 4</option><option value="Ver 5" ${st === 'Ver 5' ? 'selected' : ''}>Ver 5</option><option value="Chờ phản hồi" ${st === 'Chờ phản hồi' ? 'selected' : ''}>Chờ phản hồi</option><option value="Final" ${st === 'Final' ? 'selected' : ''}>Final</option><option value="Chờ sản xuất" ${st === 'Chờ sản xuất' ? 'selected' : ''}>Chờ sản xuất</option><option value="Pending" ${st === 'Pending' ? 'selected' : ''}>Pending</option></select></td>
+                                <td class="p-2 md:p-3"><input type="text" value="${task.progressNote || ''}" onchange="updateTask(${task.id}, 'progressNote', this.value)" placeholder="Tình trạng..." class="w-full bg-slate-50 px-2 py-1 rounded-lg border border-slate-200 text-xs text-slate-700"></td>
+                                <td class="p-2 md:p-3"><div class="flex flex-wrap items-center gap-1 mb-1">${linksHtml}</div><button onclick="addLinkToTask(${task.id})" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"><i class="fa-solid fa-plus-circle"></i> Thêm TL</button></td>
+                                <td class="p-2 md:p-3 text-center"><button onclick="deleteTask(${task.id})" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash-can text-xs"></i></button></td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                tabContentHtml = `
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                        <div><h2 class="font-bold text-base md:text-lg text-slate-800">Danh Sách Công Việc</h2><p class="text-xs text-slate-500">Cộng tác trực tuyến với các thành viên trong dự án.</p></div>
+                        <button onclick="addNewTask()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm font-medium px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-plus"></i> Thêm công việc</button>
+                    </div>
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                        <table class="w-full text-left border-collapse min-w-[950px]">
+                            <thead><tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider"><th class="p-3">Tên công việc</th><th class="p-3">Phụ trách</th><th class="p-3">Deadline</th><th class="p-3">Ưu tiên</th><th class="p-3">Trạng thái</th><th class="p-3">Ghi chú</th><th class="p-3">Tài liệu</th><th class="p-3 text-center">Xóa</th></tr></thead>
+                            <tbody>${tasksHtml}</tbody>
+                        </table>
+                    </div>
+                `;
+            } 
+            else if (currentTab === 'gantt') {
+                let ganttRows = '';
+                proj.tasks.forEach((task, index) => {
+                    ganttRows += `<div class="grid grid-cols-12 gap-2 items-center py-2.5 border-b border-slate-100 text-xs md:text-sm"><div class="col-span-4 font-medium text-slate-800 truncate">${index + 1}. ${task.name}</div><div class="col-span-2 text-xs text-slate-500">${task.assignee}</div><div class="col-span-6"><div class="w-full bg-indigo-50 h-7 rounded-lg flex items-center px-3 text-indigo-900 text-xs font-semibold"><i class="fa-regular fa-calendar-days mr-2 text-indigo-600"></i> Deadline: ${task.deadline || 'Chưa cập nhật'}</div></div></div>`;
+                });
+                tabContentHtml = `<div class="mb-4"><h2 class="font-bold text-base md:text-lg text-slate-800">Biểu Đồ Tiến Độ</h2></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto"><div class="min-w-[650px] space-y-2">${ganttRows || '<p class="text-xs text-slate-400">Chưa có công việc.</p>'}</div></div>`;
+            }
+            else if (currentTab === 'costs') {
+                let totalCost = 0;
+                let costRows = '';
+                proj.tasks.forEach(t => {
+                    totalCost += Number(t.cost) || 0;
+                    costRows += `<tr class="border-b border-slate-100 text-xs md:text-sm"><td class="p-3">${t.name}</td><td class="p-3">${t.assignee}</td><td class="p-3"><input type="number" value="${t.cost || 0}" onchange="updateTask(${t.id}, 'cost', this.value)" class="w-32 bg-slate-50 px-2 py-1 rounded border text-indigo-600 font-semibold"> VNĐ</td></tr>`;
+                });
+                tabContentHtml = `<div class="mb-6"><h2 class="font-bold text-base md:text-lg text-slate-800">Quản Lý Chi Phí</h2></div><div class="bg-indigo-600 text-white p-5 rounded-2xl shadow-sm mb-6"><div class="text-xs uppercase opacity-80">Tổng chi phí</div><div class="text-2xl font-bold mt-2">${totalCost.toLocaleString('vi-VN')} VNĐ</div></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto"><table class="w-full text-left border-collapse min-w-[500px]"><thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Công việc</th><th class="p-3">Phụ trách</th><th class="p-3">Chi phí</th></tr></thead><tbody>${costRows}</tbody></table></div>`;
+            }
+            else if (currentTab === 'risks') {
+                let riskRows = '';
+                proj.tasks.forEach(task => {
+                    riskRows += `<tr class="border-b border-slate-100 align-top text-xs md:text-sm"><td class="p-3 font-medium">${task.name}</td><td class="p-3 space-y-2"><div><label class="block text-[10px] font-semibold text-amber-600 uppercase mb-1">Rủi ro:</label><textarea rows="2" onchange="updateTask(${task.id}, 'issue', this.value)" class="w-full bg-amber-50/50 p-2 rounded border border-amber-200 text-xs">${task.issue || ''}</textarea></div><div><label class="block text-[10px] font-semibold text-emerald-600 uppercase mb-1">Giải pháp:</label><textarea rows="2" onchange="updateTask(${task.id}, 'solution', this.value)" class="w-full bg-emerald-50/50 p-2 rounded border border-emerald-200 text-xs">${task.solution || ''}</textarea></div></td></tr>`;
+                });
+                tabContentHtml = `<div class="mb-4"><h2 class="font-bold text-base md:text-lg text-slate-800">Rủi Ro & Giải Pháp</h2></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto"><table class="w-full text-left border-collapse min-w-[550px]"><thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Công việc</th><th class="p-3">Nội dung</th></tr></thead><tbody>${riskRows}</tbody></table></div>`;
+            }
+
+            let startInput = renderCustomDateInput(proj.startDate, `updateProjectInfo('startDate', this.value)`, `proj_start_${proj.id}`);
+            let deadlineInput = renderCustomDateInput(proj.deadline, `updateProjectInfo('deadline', this.value)`, `proj_deadline_${proj.id}`);
+            let sharedEmailsVal = (proj.sharedEmails || []).join(', ');
+
+            mainEl.innerHTML = `
+                <div class="bg-white border-b border-slate-200 p-4 md:p-6 shadow-sm">
+                    <div class="max-w-7xl mx-auto">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+                            <div class="flex-1 w-full pr-2"><label class="text-[11px] font-semibold text-slate-400 uppercase">Tên dự án</label><input type="text" value="${proj.name}" onchange="updateProjectInfo('name', this.value)" class="w-full text-xl md:text-2xl font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none py-1"></div>
+                            <button onclick="exportProjectReport()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-file-arrow-down"></i> Xuất Báo Cáo</button>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-4">
+                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label><input type="text" value="${proj.members}" onchange="updateProjectInfo('members', this.value)" class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
+                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Ngày bắt đầu</label>${startInput}</div>
+                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Deadline tổng</label>${deadlineInput}</div>
+                        </div>
+                        <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                            <div class="text-xs font-semibold text-indigo-900 whitespace-nowrap"><i class="fa-solid fa-share-nodes mr-1"></i> Chia sẻ quyền làm việc (Email):</div>
+                            <input type="text" value="${sharedEmailsVal}" onchange="updateSharedEmails(this.value)" placeholder="Nhập email thành viên, cách nhau bằng dấu phẩy (,)..." class="w-full flex-1 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-xs text-slate-700 focus:outline-none focus:border-indigo-600">
+                        </div>
+                        <div class="flex items-center gap-2 mt-4 border-b border-slate-100 pb-2 overflow-x-auto">
+                            <button onclick="switchTab('tasks')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"><i class="fa-solid fa-list-check mr-1.5"></i> Công việc</button>
+                            <button onclick="switchTab('gantt')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'gantt' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"><i class="fa-solid fa-chart-gantt mr-1.5"></i> Gantt Chart</button>
+                            <button onclick="switchTab('costs')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'costs' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"><i class="fa-solid fa-wallet mr-1.5"></i> Chi phí</button>
+                            <button onclick="switchTab('risks')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'risks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Rủi ro</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 md:p-6 max-w-7xl mx-auto w-full flex-1">${tabContentHtml}</div>
+            `;
+        }
+
+        function renderApp() {
+            renderProjectList();
+            renderMainContent();
+            checkTaskDeadlines();
+        }
+    </script>
+</body>
+</html>
