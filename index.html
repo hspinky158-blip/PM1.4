@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý Dự án & Công việc (Cloud Cá nhân & Chia sẻ)</title>
+    <title>Quản lý Dự án & Công việc (Cloud Riêng Tư & Chia Sẻ)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc, query, where, or } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -38,6 +38,9 @@
             window.setDoc = setDoc;
             window.doc = doc;
             window.deleteDoc = deleteDoc;
+            window.query = query;
+            window.where = where;
+            window.or = or;
 
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -74,7 +77,7 @@
                 <i class="fa-solid fa-cloud-arrow-up"></i>
             </div>
             <h1 class="text-2xl font-bold text-slate-900 mb-2">Không Gian Làm Việc Cloud</h1>
-            <p class="text-slate-500 text-sm mb-8">Mỗi tài khoản Google có không gian dự án độc lập và tính năng chia sẻ linh hoạt.</p>
+            <p class="text-slate-500 text-sm mb-8">Mỗi tài khoản Google quản lý không gian dự án riêng tư độc lập.</p>
             <button onclick="window.signInWithPopup(window.auth, window.provider)" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3.5 px-6 rounded-2xl transition shadow-lg shadow-indigo-200 flex items-center justify-center gap-3 cursor-pointer">
                 <i class="fa-brands fa-google text-lg"></i> Đăng nhập bằng Google
             </button>
@@ -207,44 +210,15 @@
                     const owner = data.ownerEmail;
                     const shared = data.sharedEmails || [];
                     
-                    // Chỉ nạp vào danh sách nếu: Bạn là chủ dự án HOẶC email của bạn nằm trong danh sách được chia sẻ
+                    // Chỉ nạp dữ liệu nếu user là chủ sở hữu HOẶC email của user được add trong danh sách chia sẻ
                     if (owner === userEmail || shared.includes(userEmail)) {
                         projects.push({ id: docSnap.id, ...data });
                     }
                 });
 
-                // Nếu tài khoản này hoàn toàn chưa có dự án nào, tự động tạo một dự án mẫu khởi đầu
-                if (projects.length === 0) {
-                    const defaultProj = {
-                        id: "proj_" + Date.now(),
-                        name: 'Dự án đầu tiên của tôi',
-                        ownerEmail: userEmail,
-                        sharedEmails: [],
-                        members: 'Thành viên nhóm',
-                        startDate: getTodayDisplay(),
-                        deadline: '31/12/2026',
-                        tasks: [
-                            { 
-                                id: 101, 
-                                name: 'Lên ý tưởng thiết kế', 
-                                assignee: 'Tôi', 
-                                startDate: getTodayDisplay(),
-                                deadline: getTodayDisplay(), 
-                                urgency: 'Cao', 
-                                status: 'Ver 1',
-                                progressNote: 'Đang bắt đầu',
-                                cost: 0,
-                                links: [],
-                                issue: '',
-                                solution: ''
-                            }
-                        ]
-                    };
-                    await window.setDoc(window.doc(window.db, "projects", defaultProj.id), defaultProj);
-                    projects.push(defaultProj);
-                }
-
-                currentProjectId = currentProjectId || projects[0].id;
+                // Đã loại bỏ hoàn toàn dự án mẫu tự động. 
+                // Nếu tài khoản mới chưa có dự án, danh sách sẽ để trống sạch sẽ để bạn tự bấm nút + tạo mới.
+                currentProjectId = projects.length > 0 ? projects[0].id : null;
                 renderApp();
             } catch (error) {
                 console.error("Lỗi tải Firebase:", error);
@@ -293,7 +267,6 @@
         async function updateSharedEmails(value) {
             const proj = projects.find(p => p.id === currentProjectId);
             if (proj) {
-                // Tách danh sách email theo dấu phẩy, loại bỏ khoảng trắng thừa
                 const emails = value.split(',').map(e => e.trim()).filter(e => e !== '');
                 proj.sharedEmails = emails;
                 await saveData();
@@ -303,8 +276,8 @@
         async function deleteProject(id, event) {
             event.stopPropagation();
             const proj = projects.find(p => p.id === id);
-            if (proj && proj.ownerEmail !== window.currentUser.email) {
-                alert("Bạn chỉ có quyền xóa hoặc chỉnh sửa dự án do chính bạn tạo ra!");
+            if (proj && proj.ownerEmail && proj.ownerEmail !== window.currentUser.email) {
+                alert("Bạn chỉ có quyền xóa dự án do chính tài khoản của bạn tạo ra!");
                 return;
             }
             if(confirm('Bạn có chắc muốn xóa dự án này trên Cloud?')) {
@@ -474,7 +447,7 @@
             listEl.innerHTML = '';
 
             if (!projects || projects.length === 0) {
-                listEl.innerHTML = `<div class="text-center py-4 text-slate-400 text-xs">Chưa có dự án nào.</div>`;
+                listEl.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs px-2">Chưa có dự án nào. Bấm nút <b>+</b> phía trên để tạo mới.</div>`;
                 return;
             }
 
@@ -519,7 +492,7 @@
             const proj = projects.find(p => p.id === currentProjectId);
 
             if (!proj) {
-                mainEl.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 text-center"><p class="text-sm">Chọn một dự án ở trên hoặc tạo mới để bắt đầu.</p></div>`;
+                mainEl.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 text-center"><i class="fa-solid fa-folder-open text-4xl mb-3"></i><p class="text-sm">Chưa có dự án nào. Bấm nút dấu cộng ở menu bên trái để tạo dự án mới.</p></div>`;
                 return;
             }
 
