@@ -198,22 +198,21 @@
             document.getElementById('user-name').innerText = window.currentUser.displayName || window.currentUser.email;
 
             try {
-                const userEmail = window.currentUser.email;
+                const userEmail = window.currentUser.email.trim().toLowerCase();
                 const querySnapshot = await window.getDocs(window.collection(window.db, "projects"));
                 
                 projects = [];
                 querySnapshot.forEach((docSnap) => {
                     const data = docSnap.data();
-                    const owner = data.ownerEmail;
-                    const shared = data.sharedEmails || [];
+                    const owner = (data.ownerEmail || '').trim().toLowerCase();
+                    const shared = (data.sharedEmails || []).map(e => e.trim().toLowerCase());
                     
-                    // Kiểm tra xem user hiện tại có quyền xem dự án này không (Là chủ sở hữu HOẶC email nằm trong mảng chia sẻ)
+                    // Kiểm tra quyền: Chủ sở hữu HOẶC email nằm trong danh sách chia sẻ
                     if (owner === userEmail || shared.includes(userEmail)) {
                         projects.push({ id: docSnap.id, ...data });
                     }
                 });
 
-                // Hoàn toàn không tạo dự án mẫu tự động. Nếu danh sách trống, hiển thị thông báo trống.
                 currentProjectId = projects.length > 0 ? projects[0].id : null;
                 renderApp();
             } catch (error) {
@@ -237,7 +236,7 @@
             const newProj = {
                 id: "proj_" + Date.now(),
                 name: 'Dự án mới',
-                ownerEmail: window.currentUser.email,
+                ownerEmail: window.currentUser.email.trim().toLowerCase(),
                 sharedEmails: [],
                 members: 'Thành viên nhóm',
                 startDate: getTodayDisplay(),
@@ -263,7 +262,6 @@
         async function updateSharedEmails(value) {
             const proj = projects.find(p => p.id === currentProjectId);
             if (proj) {
-                // Tách danh sách email theo dấu phẩy, loại bỏ khoảng trắng và chuyển về chữ thường để so sánh chính xác
                 const emails = value.split(',').map(e => e.trim().toLowerCase()).filter(e => e !== '');
                 proj.sharedEmails = emails;
                 await saveData();
@@ -273,7 +271,8 @@
         async function deleteProject(id, event) {
             event.stopPropagation();
             const proj = projects.find(p => p.id === id);
-            if (proj && proj.ownerEmail && proj.ownerEmail !== window.currentUser.email) {
+            const userEmail = window.currentUser.email.trim().toLowerCase();
+            if (proj && proj.ownerEmail && proj.ownerEmail !== userEmail) {
                 alert("Bạn chỉ có quyền xóa dự án do chính tài khoản của bạn tạo ra!");
                 return;
             }
@@ -449,6 +448,7 @@
             }
 
             const todayStr = getTodayDisplay();
+            const userEmail = window.currentUser.email.trim().toLowerCase();
 
             projects.forEach(proj => {
                 const isActive = proj.id === currentProjectId;
@@ -461,7 +461,7 @@
                 }
 
                 const badgeHtml = projDueCount > 0 ? `<span class="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full ml-1 animate-bounce">${projDueCount}</span>` : '';
-                const isShared = proj.ownerEmail && proj.ownerEmail !== window.currentUser.email ? `<i class="fa-solid fa-users text-[10px] text-indigo-500 ml-1" title="Dự án được chia sẻ với bạn"></i>` : '';
+                const isShared = proj.ownerEmail && proj.ownerEmail !== userEmail ? `<i class="fa-solid fa-users text-[10px] text-indigo-500 ml-1" title="Dự án được chia sẻ với bạn"></i>` : '';
 
                 const item = document.createElement('div');
                 item.className = `group flex items-center justify-between p-2.5 md:p-3 rounded-xl cursor-pointer transition ${isActive ? 'bg-indigo-50 text-indigo-900 font-semibold shadow-sm' : 'hover:bg-slate-100 text-slate-600'}`;
