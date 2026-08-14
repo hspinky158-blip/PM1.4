@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý Dự án & Công việc (Cloud Firebase & Google Auth)</title>
+    <title>Quản lý Dự án & Công việc (Cloud Cá nhân & Chia sẻ)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -74,7 +74,7 @@
                 <i class="fa-solid fa-cloud-arrow-up"></i>
             </div>
             <h1 class="text-2xl font-bold text-slate-900 mb-2">Không Gian Làm Việc Cloud</h1>
-            <p class="text-slate-500 text-sm mb-8">Quản lý dự án, công việc và cộng tác nhóm thông minh với tài khoản Google của bạn.</p>
+            <p class="text-slate-500 text-sm mb-8">Mỗi tài khoản Google có không gian dự án độc lập và tính năng chia sẻ linh hoạt.</p>
             <button onclick="window.signInWithPopup(window.auth, window.provider)" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3.5 px-6 rounded-2xl transition shadow-lg shadow-indigo-200 flex items-center justify-center gap-3 cursor-pointer">
                 <i class="fa-brands fa-google text-lg"></i> Đăng nhập bằng Google
             </button>
@@ -95,7 +95,7 @@
                     </button>
                 </div>
                 <div class="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <h2 class="font-bold text-xs uppercase text-slate-500 tracking-wider">Dự án của bạn</h2>
+                    <h2 class="font-bold text-xs uppercase text-slate-500 tracking-wider">Dự án của tôi</h2>
                     <button onclick="addNewProject()" class="bg-indigo-600 hover:bg-indigo-700 text-white w-7 h-7 rounded-full flex items-center justify-center transition shadow-sm cursor-pointer" title="Thêm dự án mới">
                         <i class="fa-solid fa-plus text-xs"></i>
                     </button>
@@ -207,32 +207,34 @@
                     const owner = data.ownerEmail;
                     const shared = data.sharedEmails || [];
                     
-                    if (!owner || owner === userEmail || shared.includes(userEmail)) {
+                    // Chỉ nạp vào danh sách nếu: Bạn là chủ dự án HOẶC email của bạn nằm trong danh sách được chia sẻ
+                    if (owner === userEmail || shared.includes(userEmail)) {
                         projects.push({ id: docSnap.id, ...data });
                     }
                 });
 
+                // Nếu tài khoản này hoàn toàn chưa có dự án nào, tự động tạo một dự án mẫu khởi đầu
                 if (projects.length === 0) {
                     const defaultProj = {
                         id: "proj_" + Date.now(),
-                        name: 'Dự án MIK HẠ TẦNG',
+                        name: 'Dự án đầu tiên của tôi',
                         ownerEmail: userEmail,
                         sharedEmails: [],
-                        members: 'Ngọt, Phanh, Thắng',
+                        members: 'Thành viên nhóm',
                         startDate: getTodayDisplay(),
-                        deadline: '30/06/2026',
+                        deadline: '31/12/2026',
                         tasks: [
                             { 
                                 id: 101, 
-                                name: 'Kịch bản', 
-                                assignee: 'Ngọt, Phanh', 
+                                name: 'Lên ý tưởng thiết kế', 
+                                assignee: 'Tôi', 
                                 startDate: getTodayDisplay(),
                                 deadline: getTodayDisplay(), 
                                 urgency: 'Cao', 
                                 status: 'Ver 1',
-                                progressNote: 'Đang triển khai',
-                                cost: 5000000,
-                                links: [{ id: 1, title: 'Kịch bản chi tiết', url: 'https://drive.google.com' }],
+                                progressNote: 'Đang bắt đầu',
+                                cost: 0,
+                                links: [],
                                 issue: '',
                                 solution: ''
                             }
@@ -264,10 +266,10 @@
         async function addNewProject() {
             const newProj = {
                 id: "proj_" + Date.now(),
-                name: 'Dự án mới chưa đặt tên',
+                name: 'Dự án mới',
                 ownerEmail: window.currentUser.email,
                 sharedEmails: [],
-                members: 'Chưa có thành viên',
+                members: 'Thành viên nhóm',
                 startDate: getTodayDisplay(),
                 deadline: '31/12/2026',
                 tasks: []
@@ -291,6 +293,7 @@
         async function updateSharedEmails(value) {
             const proj = projects.find(p => p.id === currentProjectId);
             if (proj) {
+                // Tách danh sách email theo dấu phẩy, loại bỏ khoảng trắng thừa
                 const emails = value.split(',').map(e => e.trim()).filter(e => e !== '');
                 proj.sharedEmails = emails;
                 await saveData();
@@ -300,11 +303,11 @@
         async function deleteProject(id, event) {
             event.stopPropagation();
             const proj = projects.find(p => p.id === id);
-            if (proj && proj.ownerEmail && proj.ownerEmail !== window.currentUser.email) {
-                alert("Bạn chỉ có thể rời khỏi hoặc chủ dự án mới có quyền xóa dự án này!");
+            if (proj && proj.ownerEmail !== window.currentUser.email) {
+                alert("Bạn chỉ có quyền xóa hoặc chỉnh sửa dự án do chính bạn tạo ra!");
                 return;
             }
-            if(confirm('Bạn có chắc muốn xóa dự án này?')) {
+            if(confirm('Bạn có chắc muốn xóa dự án này trên Cloud?')) {
                 try {
                     await window.deleteDoc(window.doc(window.db, "projects", String(id)));
                     projects = projects.filter(p => p.id !== id);
@@ -488,7 +491,7 @@
                 }
 
                 const badgeHtml = projDueCount > 0 ? `<span class="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full ml-1 animate-bounce">${projDueCount}</span>` : '';
-                const isShared = proj.ownerEmail && proj.ownerEmail !== window.currentUser.email ? `<i class="fa-solid fa-users text-[10px] text-indigo-500 ml-1" title="Dự án chia sẻ"></i>` : '';
+                const isShared = proj.ownerEmail && proj.ownerEmail !== window.currentUser.email ? `<i class="fa-solid fa-users text-[10px] text-indigo-500 ml-1" title="Dự án được chia sẻ với bạn"></i>` : '';
 
                 const item = document.createElement('div');
                 item.className = `group flex items-center justify-between p-2.5 md:p-3 rounded-xl cursor-pointer transition ${isActive ? 'bg-indigo-50 text-indigo-900 font-semibold shadow-sm' : 'hover:bg-slate-100 text-slate-600'}`;
@@ -503,7 +506,7 @@
                             <i class="fa-regular fa-clock text-[9px]"></i> ĐT: ${proj.deadline || 'Chưa có'}
                         </div>
                     </div>
-                    <button onclick="deleteProject('${proj.id}', event)" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-1 transition cursor-pointer">
+                    <button onclick="deleteProject('${proj.id}', event)" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-1 transition cursor-pointer" title="Xóa dự án">
                         <i class="fa-solid fa-trash-can text-xs"></i>
                     </button>
                 `;
@@ -569,7 +572,7 @@
 
                 tabContentHtml = `
                     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                        <div><h2 class="font-bold text-base md:text-lg text-slate-800">Danh Sách Công Việc</h2><p class="text-xs text-slate-500">Cộng tác trực tuyến với các thành viên trong dự án.</p></div>
+                        <div><h2 class="font-bold text-base md:text-lg text-slate-800">Danh Sách Công Việc</h2><p class="text-xs text-slate-500">Quản lý các hạng mục công việc trong dự án.</p></div>
                         <button onclick="addNewTask()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm font-medium px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-plus"></i> Thêm công việc</button>
                     </div>
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
@@ -621,8 +624,8 @@
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Deadline tổng</label>${deadlineInput}</div>
                         </div>
                         <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                            <div class="text-xs font-semibold text-indigo-900 whitespace-nowrap"><i class="fa-solid fa-share-nodes mr-1"></i> Chia sẻ quyền làm việc (Email):</div>
-                            <input type="text" value="${sharedEmailsVal}" onchange="updateSharedEmails(this.value)" placeholder="Nhập email thành viên, cách nhau bằng dấu phẩy (,)..." class="w-full flex-1 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-xs text-slate-700 focus:outline-none focus:border-indigo-600">
+                            <div class="text-xs font-semibold text-indigo-900 whitespace-nowrap"><i class="fa-solid fa-share-nodes mr-1"></i> Chia sẻ quyền xem/sửa (Email):</div>
+                            <input type="text" value="${sharedEmailsVal}" onchange="updateSharedEmails(this.value)" placeholder="Nhập email người nhận, cách nhau bằng dấu phẩy (,)..." class="w-full flex-1 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-xs text-slate-700 focus:outline-none focus:border-indigo-600">
                         </div>
                         <div class="flex items-center gap-2 mt-4 border-b border-slate-100 pb-2 overflow-x-auto">
                             <button onclick="switchTab('tasks')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"><i class="fa-solid fa-list-check mr-1.5"></i> Công việc</button>
