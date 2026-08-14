@@ -9,7 +9,7 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc, query, where, or } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -38,9 +38,6 @@
             window.setDoc = setDoc;
             window.doc = doc;
             window.deleteDoc = deleteDoc;
-            window.query = query;
-            window.where = where;
-            window.or = or;
 
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -210,14 +207,13 @@
                     const owner = data.ownerEmail;
                     const shared = data.sharedEmails || [];
                     
-                    // Chỉ nạp dữ liệu nếu user là chủ sở hữu HOẶC email của user được add trong danh sách chia sẻ
+                    // Kiểm tra xem user hiện tại có quyền xem dự án này không (Là chủ sở hữu HOẶC email nằm trong mảng chia sẻ)
                     if (owner === userEmail || shared.includes(userEmail)) {
                         projects.push({ id: docSnap.id, ...data });
                     }
                 });
 
-                // Đã loại bỏ hoàn toàn dự án mẫu tự động. 
-                // Nếu tài khoản mới chưa có dự án, danh sách sẽ để trống sạch sẽ để bạn tự bấm nút + tạo mới.
+                // Hoàn toàn không tạo dự án mẫu tự động. Nếu danh sách trống, hiển thị thông báo trống.
                 currentProjectId = projects.length > 0 ? projects[0].id : null;
                 renderApp();
             } catch (error) {
@@ -267,7 +263,8 @@
         async function updateSharedEmails(value) {
             const proj = projects.find(p => p.id === currentProjectId);
             if (proj) {
-                const emails = value.split(',').map(e => e.trim()).filter(e => e !== '');
+                // Tách danh sách email theo dấu phẩy, loại bỏ khoảng trắng và chuyển về chữ thường để so sánh chính xác
+                const emails = value.split(',').map(e => e.trim().toLowerCase()).filter(e => e !== '');
                 proj.sharedEmails = emails;
                 await saveData();
             }
