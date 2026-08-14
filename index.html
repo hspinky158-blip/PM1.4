@@ -9,7 +9,7 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc, query, where, or } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { initializeFirestore, collection, getDocs, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -38,9 +38,6 @@
             window.setDoc = setDoc;
             window.doc = doc;
             window.deleteDoc = deleteDoc;
-            window.query = query;
-            window.where = where;
-            window.or = or;
 
             onAuthStateChanged(auth, (user) => {
                 if (user) {
@@ -168,7 +165,6 @@
             projects.forEach(proj => {
                 if (proj.tasks) {
                     proj.tasks.forEach(task => {
-                        // Bỏ qua không tính thông báo nếu trạng thái là "Chờ phản hồi" hoặc "Final"
                         const st = task.status || 'Ver 1';
                         if (st === 'Final' || st === 'Chờ phản hồi') return;
 
@@ -203,18 +199,17 @@
 
             try {
                 const userEmail = window.currentUser.email;
-                const q = window.query(
-                    window.collection(window.db, "projects"),
-                    window.or(
-                        window.where("ownerEmail", "==", userEmail),
-                        window.where("sharedEmails", "array-contains", userEmail)
-                    )
-                );
-
-                const querySnapshot = await window.getDocs(q);
+                const querySnapshot = await window.getDocs(window.collection(window.db, "projects"));
+                
                 projects = [];
                 querySnapshot.forEach((docSnap) => {
-                    projects.push({ id: docSnap.id, ...docSnap.data() });
+                    const data = docSnap.data();
+                    const owner = data.ownerEmail;
+                    const shared = data.sharedEmails || [];
+                    
+                    if (owner === userEmail || shared.includes(userEmail)) {
+                        projects.push({ id: docSnap.id, ...data });
+                    }
                 });
 
                 if (projects.length === 0) {
@@ -460,6 +455,15 @@
                     </div>
                 </div>
             `;
+        }
+
+        function yyyyMmDdToDdMmYyyy(dateStr) {
+            if (!dateStr) return '';
+            if (dateStr.includes('-')) {
+                const parts = dateStr.split('-');
+                if (parts[0].length === 4) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            return dateStr;
         }
 
         function renderProjectList() {
