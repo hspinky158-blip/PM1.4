@@ -141,9 +141,8 @@
         let filterKeyword = '';
         let filterUrgency = 'all';
         let filterDeadline = '';
-        let memberSearchKeyword = ''; // Từ khóa tra cứu trong sổ danh bạ
+        let memberSearchKeyword = '';
 
-        // Sổ địa chỉ danh bạ lưu trữ cục bộ
         let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry')) || {};
 
         function getEmailByNameOrInput(inputStr) {
@@ -332,7 +331,7 @@
                 name: 'Dự án mới',
                 ownerEmail: window.currentUser.email.trim().toLowerCase(),
                 sharedEmails: [],
-                members: 'Thành viên nhóm',
+                members: '',
                 startDate: getTodayDisplay(),
                 deadline: '31/12/2026',
                 tasks: []
@@ -346,16 +345,16 @@
         async function updateProjectInfo(field, value) {
             const proj = projects.find(p => p.id === currentProjectId);
             if (proj) {
+                proj[field] = value;
                 if (field === 'members') {
+                    // TỰ ĐỘNG ĐỒNG BỘ: Chuyển toàn bộ tên thành viên hiển thị thành email để cập nhật quyền chia sẻ
                     let rawList = value.split(',').map(e => e.trim()).filter(e => e !== '');
                     let resolvedEmails = rawList.map(item => getEmailByNameOrInput(item));
-                    proj.members = value;
                     proj.sharedEmails = resolvedEmails;
-                } else {
-                    proj[field] = value;
                 }
                 await saveData();
                 renderProjectList();
+                renderMainContent();
             }
         }
 
@@ -618,10 +617,12 @@
             const userEmail = window.currentUser.email.trim().toLowerCase();
             const isOwner = (proj.ownerEmail || '').trim().toLowerCase() === userEmail;
 
+            // KIỂM TRA BẢO MẬT & PHÂN QUYỀN XEM CÔNG VIỆC:
+            // Chủ dự án (Owner) thấy tất cả. Thành viên được add vào chỉ thấy task do chính mình phụ trách.
             let visibleTasks = proj.tasks;
             if (!isOwner) {
                 visibleTasks = proj.tasks.filter(task => {
-                    let taskAssigneeEmail = (task.assignee || '').trim().toLowerCase();
+                    let taskAssigneeEmail = (getEmailByNameOrInput(task.assignee || '')).trim().toLowerCase();
                     return taskAssigneeEmail === userEmail;
                 });
             }
@@ -802,7 +803,6 @@
                 tabContentHtml = `<div class="mb-4"><h2 class="font-bold text-base md:text-lg text-slate-800">Rủi Ro & Giải Pháp</h2></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto"><table class="w-full text-left border-collapse min-w-[550px]"><thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Công việc</th><th class="p-3">Nội dung</th></tr></thead><tbody>${riskRows}</tbody></table></div>`;
             }
             else if (currentTab === 'directory') {
-                // TAB QUẢN LÝ & TRA CỨU SỔ DANH BẠ THÀNH VIÊN
                 let filteredRegistry = Object.entries(memberRegistry).filter(([name, email]) => {
                     let kw = memberSearchKeyword.toLowerCase();
                     return name.toLowerCase().includes(kw) || email.toLowerCase().includes(kw);
