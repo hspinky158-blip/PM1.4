@@ -156,7 +156,7 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v7')) || {};
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v8')) || {};
 
         function showCustomModal(title, htmlContent, iconClass = 'fa-bell', customActions = null) {
             document.getElementById('modal-title').innerText = title;
@@ -251,7 +251,7 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v7', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v8', JSON.stringify(memberRegistry));
         }
 
         function logActivity(proj, actionText) {
@@ -376,8 +376,8 @@
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
 
-            const userEmail = window.currentUser.email.trim().toLowerCase();
-            const isOwner = (proj.ownerEmail || '').trim().toLowerCase() === userEmail;
+            const role = getUserProjectRole(proj);
+            const isOwnerOrEditor = (role === 'owner' || role === 'editor');
 
             let activitiesHtml = '';
             if (!proj.activities || proj.activities.length === 0) {
@@ -404,8 +404,8 @@
             let requestsHtml = '';
             if (proj.requests && proj.requests.length > 0) {
                 proj.requests.forEach(req => {
-                    // CHỈ CHỦ DỰ ÁN MỚI THẤY NÚT DUYỆT NGAY. NGƯỜI XEM SẼ KHÔNG CÓ NÚT NÀY.
-                    let approveBtn = isOwner ? `
+                    // CHỈ CHỦ DỰ ÁN HOẶC EDITOR MỚI THẤY NÚT DUYỆT NGAY. NGƯỜI XEM (VIEWER) SỐNG CHỈ THẤY TRẠNG THÁI CHỜ DUYỆT.
+                    let approveBtn = isOwnerOrEditor ? `
                         <button onclick="approveRequest(${req.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer">Duyệt ngay</button>
                     ` : `<span class="text-[10px] text-slate-400 italic">Đang chờ Chủ dự án duyệt</span>`;
 
@@ -437,11 +437,9 @@
         async function approveRequest(reqId) {
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
-            const userEmail = window.currentUser.email.trim().toLowerCase();
-            const isOwner = (proj.ownerEmail || '').trim().toLowerCase() === userEmail;
-
-            if (!isOwner) {
-                showCustomModal("Cảnh báo", "Chỉ Chủ dự án mới có quyền phê duyệt yêu cầu này!", "fa-triangle-exclamation");
+            const role = getUserProjectRole(proj);
+            if (role !== 'owner' && role !== 'editor') {
+                showCustomModal("Cảnh báo", "Bạn không có quyền phê duyệt yêu cầu này!", "fa-triangle-exclamation");
                 return;
             }
 
