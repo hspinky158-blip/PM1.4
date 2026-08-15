@@ -156,7 +156,7 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v12')) || {};
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v13')) || {};
 
         function showCustomModal(title, htmlContent, iconClass = 'fa-bell', customActions = null) {
             document.getElementById('modal-title').innerText = title;
@@ -251,7 +251,7 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v12', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v13', JSON.stringify(memberRegistry));
         }
 
         function logActivity(proj, actionText) {
@@ -426,7 +426,6 @@
                 <div class="w-full text-left space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                     ${clearAllBtn}
                     <div>
-                        <h4 class="font-bold text-xs text-amber-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Yêu cầu cấp quyền chờ duyệt</h4>
                         <div class="space-y-1">${requestsHtml}</div>
                     </div>
                 </div>
