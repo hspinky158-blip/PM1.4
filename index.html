@@ -138,25 +138,6 @@
         let currentProjectId = null;
         let currentTab = 'tasks';
 
-        function playNotificationSound() {
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
-                osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.6);
-            } catch (e) {
-                console.log("Không thể phát âm thanh:", e);
-            }
-        }
-
         async function requestNotificationPermission() {
             if ("Notification" in window) {
                 const permission = await Notification.requestPermission();
@@ -215,26 +196,34 @@
 
                 // Rung thiết bị
                 if ("vibrate" in navigator) {
-                    try { navigator.vibrate([200, 100, 200]); } catch (e) {}
+                    try { navigator.vibrate([200, 100, 200, 100, 200]); } catch (e) {}
                 }
 
+                // Đẩy thông báo ra màn hình thông qua Service Worker (để hiện nổi trên thanh trạng thái di động)
                 if ("Notification" in window && Notification.permission === "granted") {
                     const key = "notified_" + todayStr;
                     if (!sessionStorage.getItem(key)) {
-                        playNotificationSound();
                         
-                        const notification = new Notification(`⏰ Có ${dueCount} công việc đến hạn hôm nay!`, {
-                            body: dueDetails.join("\n"),
-                            icon: "./playstore.png",
-                            badge: "./playstore.png",
-                            tag: "deadline-notification",
-                            requireInteraction: true
-                        });
-
-                        notification.onclick = function() {
-                            window.focus();
-                            notification.close();
-                        };
+                        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                            navigator.serviceWorker.ready.then(registration => {
+                                registration.showNotification(`⏰ Có ${dueCount} công việc đến hạn hôm nay!`, {
+                                    body: dueDetails.join("\n"),
+                                    icon: "./playstore.png",
+                                    badge: "./playstore.png",
+                                    tag: "deadline-notification",
+                                    vibrate: [200, 100, 200],
+                                    requireInteraction: true
+                                });
+                            });
+                        } else {
+                            new Notification(`⏰ Có ${dueCount} công việc đến hạn hôm nay!`, {
+                                body: dueDetails.join("\n"),
+                                icon: "./playstore.png",
+                                badge: "./playstore.png",
+                                tag: "deadline-notification",
+                                requireInteraction: true
+                            });
+                        }
 
                         sessionStorage.setItem(key, "true");
                     }
