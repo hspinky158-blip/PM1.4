@@ -143,14 +143,22 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry')) || {};
+        // Sổ danh bạ lưu cấu trúc: { Tên: { email: '...', role: 'xem' / 'chinhsua' } }
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v2')) || {};
+        
+        // Tương thích ngược với định dạng cũ nếu có
+        for (let [k, v] of Object.entries(memberRegistry)) {
+            if (typeof v === 'string') {
+                memberRegistry[k] = { email: v, role: 'xem' };
+            }
+        }
 
         function getEmailByNameOrInput(inputStr) {
             if (!inputStr) return '';
             let clean = inputStr.split('(')[0].split('-')[0].trim().toLowerCase();
             if (!clean) return '';
-            for (let [name, email] of Object.entries(memberRegistry)) {
-                if (name.toLowerCase() === clean) return email;
+            for (let [name, data] of Object.entries(memberRegistry)) {
+                if (name.toLowerCase() === clean) return data.email;
             }
             if (window.currentUser && window.currentUser.email) {
                 let currentEmail = window.currentUser.email.trim().toLowerCase();
@@ -165,8 +173,8 @@
         function getNameByEmail(emailStr) {
             if (!emailStr) return '';
             let clean = emailStr.trim().toLowerCase();
-            for (let [name, email] of Object.entries(memberRegistry)) {
-                if (email.toLowerCase() === clean) return name;
+            for (let [name, data] of Object.entries(memberRegistry)) {
+                if (data.email.toLowerCase() === clean) return name;
             }
             if (window.currentUser && window.currentUser.email) {
                 if (clean === window.currentUser.email.trim().toLowerCase()) {
@@ -188,8 +196,9 @@
                 for (let item of items) {
                     let emailMapped = getEmailByNameOrInput(item);
                     if (emailMapped === userEmail) {
-                        let lower = item.toLowerCase();
-                        if (lower.includes('chỉnh sửa') || lower.includes('editor') || lower.includes('sửa')) {
+                        // Kiểm tra trong danh bạ xem người này được phân quyền gì
+                        let cleanName = item.split('(')[0].split('-')[0].trim();
+                        if (memberRegistry[cleanName] && memberRegistry[cleanName].role === 'chinhsua') {
                             return 'editor';
                         }
                     }
@@ -199,7 +208,7 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v2', JSON.stringify(memberRegistry));
         }
 
         function addNewMemberFromPrompt() {
@@ -207,11 +216,21 @@
             if (!name || !name.trim()) return;
             let email = prompt(`Nhập email tương ứng cho thành viên [${name.trim()}]:`);
             if (!email || !email.trim()) return;
+            let roleInput = prompt(`Phân quyền cho [${name.trim()}]: Nhập '1' nếu là Xem, nhập '2' nếu là Chỉnh sửa:`, "1");
+            let role = (roleInput === '2') ? 'chinhsua' : 'xem';
 
-            memberRegistry[name.trim()] = email.trim().toLowerCase();
+            memberRegistry[name.trim()] = { email: email.trim().toLowerCase(), role: role };
             saveMemberRegistry();
-            alert(`Đã thêm thành công: ${name.trim()} -> ${email.trim().toLowerCase()}`);
+            alert(`Đã lưu thành viên: ${name.trim()} (${role === 'chinhsua' ? 'Chỉnh sửa' : 'Xem'})`);
             renderMainContent();
+        }
+
+        function updateRegistryMemberRole(nameKey, newRole) {
+            if (memberRegistry[nameKey]) {
+                memberRegistry[nameKey].role = newRole;
+                saveMemberRegistry();
+                renderMainContent();
+            }
         }
 
         function deleteMemberRegistry(nameKey) {
@@ -615,25 +634,23 @@
                     });
                 }
 
-                let role = getUserProjectRole(proj);
-                let roleBadge = role === 'owner' ? '<span class="text-[9px] bg-indigo-100 text-indigo-700 px-1 rounded font-bold">Chủ dự án</span>' : (role === 'editor' ? '<span class="text-[9px] bg-emerald-100 text-emerald-700 px-1 rounded font-bold">Chỉnh sửa</span>' : '<span class="text-[9px] bg-slate-100 text-slate-600 px-1 rounded">Xem</span>');
-
                 const badgeHtml = projDueCount > 0 ? `<span class="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full ml-1 animate-bounce">${projDueCount}</span>` : '';
 
                 const item = document.createElement('div');
                 item.className = `group flex items-center justify-between p-2.5 md:p-3 rounded-xl cursor-pointer transition ${isActive ? 'bg-indigo-50 text-indigo-900 font-semibold shadow-sm' : 'hover:bg-slate-100 text-slate-600'}`;
                 item.onclick = () => { currentProjectId = proj.id; renderApp(); };
 
+                // ẨN NHÃN CHỦ DỰ ÁN Ở THANH BÊN TRÁI THEO YÊU CẦU
                 item.innerHTML = `
                     <div class="truncate flex-1 pr-2">
                         <div class="text-xs md:text-sm font-medium truncate flex items-center gap-1">
-                            ${proj.name} ${roleBadge} ${badgeHtml}
+                            ${proj.name} ${badgeHtml}
                         </div>
                         <div class="text-[10px] md:text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                             <i class="fa-regular fa-clock text-[9px]"></i> ĐT: ${proj.deadline || 'Chưa có'}
                         </div>
                     </div>
-                    ${role === 'owner' ? `
+                    ${proj.ownerEmail && proj.ownerEmail.trim().toLowerCase() === userEmail ? `
                     <button onclick="deleteProject('${proj.id}', event)" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-1 transition cursor-pointer" title="Xóa dự án">
                         <i class="fa-solid fa-trash-can text-xs"></i>
                     </button>` : ''}
@@ -862,20 +879,28 @@
                 tabContentHtml = `<div class="mb-4"><h2 class="font-bold text-base md:text-lg text-slate-800">Rủi Ro & Giải Pháp</h2></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto"><table class="w-full text-left border-collapse min-w-[550px]"><thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Công việc</th><th class="p-3">Nội dung</th></tr></thead><tbody>${riskRows}</tbody></table></div>`;
             }
             else if (currentTab === 'directory') {
-                let filteredRegistry = Object.entries(memberRegistry).filter(([name, email]) => {
+                let filteredRegistry = Object.entries(memberRegistry).filter(([name, data]) => {
                     let kw = memberSearchKeyword.toLowerCase();
-                    return name.toLowerCase().includes(kw) || email.toLowerCase().includes(kw);
+                    return name.toLowerCase().includes(kw) || data.email.toLowerCase().includes(kw);
                 });
 
                 let registryRows = '';
                 if (filteredRegistry.length === 0) {
-                    registryRows = `<tr><td colspan="3" class="text-center py-6 text-slate-400 italic text-xs">Chưa có thành viên nào trong sổ danh bạ hoặc không tìm thấy kết quả.</td></tr>`;
+                    registryRows = `<tr><td colspan="4" class="text-center py-6 text-slate-400 italic text-xs">Chưa có thành viên nào trong sổ danh bạ hoặc không tìm thấy kết quả.</td></tr>`;
                 } else {
-                    filteredRegistry.forEach(([name, email]) => {
+                    filteredRegistry.forEach(([name, data]) => {
+                        let roleSelect = `
+                            <select onchange="updateRegistryMemberRole('${name}', this.value)" class="text-xs px-2 py-1 rounded-lg border border-slate-200 font-semibold ${data.role === 'chinhsua' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-700'}">
+                                <option value="xem" ${data.role === 'xem' ? 'selected' : ''}>👁️ Xem</option>
+                                <option value="chinhsua" ${data.role === 'chinhsua' ? 'selected' : ''}>✏️ Chỉnh sửa</option>
+                            </select>
+                        `;
+
                         registryRows += `
                             <tr class="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
                                 <td class="p-3 font-semibold text-indigo-700">${name}</td>
-                                <td class="p-3 text-slate-600">${email}</td>
+                                <td class="p-3 text-slate-600">${data.email}</td>
+                                <td class="p-3">${roleSelect}</td>
                                 <td class="p-3 text-center">
                                     <button onclick="deleteMemberRegistry('${name}')" class="text-slate-400 hover:text-red-500 p-1 transition cursor-pointer" title="Xóa thành viên">
                                         <i class="fa-solid fa-trash-can text-xs"></i>
@@ -889,8 +914,8 @@
                 tabContentHtml = `
                     <div class="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <div>
-                            <h2 class="font-bold text-base md:text-lg text-slate-800">Danh Sách Thành Viên & Email Đã Lưu</h2>
-                            <p class="text-xs text-slate-500">Tra cứu và quản lý các tên gọi rút gọn ánh xạ với email thực tế.</p>
+                            <h2 class="font-bold text-base md:text-lg text-slate-800">Danh Sách Thành Viên & Phân Quyền</h2>
+                            <p class="text-xs text-slate-500">Chủ dự án có thể phân quyền "Xem" hoặc "Chỉnh sửa" trực tiếp cho từng thành viên tại đây.</p>
                         </div>
                         <button onclick="addNewMemberFromPrompt()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer">
                             <i class="fa-solid fa-user-plus"></i> Thêm thành viên mới
@@ -910,6 +935,7 @@
                                 <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
                                     <th class="p-3">Tên hiển thị</th>
                                     <th class="p-3">Địa chỉ Email</th>
+                                    <th class="p-3">Phân quyền vai trò</th>
                                     <th class="p-3 text-center">Xóa</th>
                                 </tr>
                             </thead>
@@ -937,7 +963,7 @@
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-2">
-                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị (VD: Hà (chỉnh sửa), Lan)</label><input type="text" value="${proj.members || ''}" list="member-suggestions" ${disProjAttr} onchange="updateProjectInfo('members', this.value)" placeholder="Gõ tên..." class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
+                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label><input type="text" value="${proj.members || ''}" list="member-suggestions" ${disProjAttr} onchange="updateProjectInfo('members', this.value)" placeholder="Gõ tên thành viên..." class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Ngày bắt đầu</label>${startInput}</div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Deadline tổng</label>${deadlineInput}</div>
                         </div>
