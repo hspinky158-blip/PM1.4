@@ -300,7 +300,7 @@
                     const data = docSnap.data();
                     const owner = (data.ownerEmail || '').trim().toLowerCase();
                     
-                    // Xử lý quyền xem dựa vào owner hoặc thành viên trong "members"
+                    // Kiểm tra quyền truy cập dự án dựa vào Owner hoặc danh sách thành viên hiển thị (members)
                     let memberEmails = [];
                     if (data.members) {
                         memberEmails = data.members.split(',').map(m => getEmailByNameOrInput(m).trim().toLowerCase());
@@ -606,7 +606,7 @@
             const userEmail = window.currentUser.email.trim().toLowerCase();
             const isOwner = (proj.ownerEmail || '').trim().toLowerCase() === userEmail;
 
-            // KIỂM TRA BẢO MẬT & PHÂN QUYỀN XEM CÔNG VIỆC:
+            // KIỂM TRA PHÂN QUYỀN XEM CÔNG VIỆC:
             // Chủ dự án thấy tất cả. Thành viên trong danh sách "Thành viên hiển thị" chỉ thấy task do chính mình phụ trách.
             let visibleTasks = proj.tasks;
             if (!isOwner) {
@@ -865,15 +865,12 @@
                                 <button onclick="exportProjectReport()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-file-arrow-down"></i> Xuất Báo Cáo</button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-4">
-                            <div class="sm:col-span-1">
-                                <label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label>
-                                <input type="text" value="${proj.members || ''}" list="member-suggestions" onchange="updateProjectInfo('members', this.value)" placeholder="Gõ tên (VD: Hà, Lan)..." class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
-                            </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-2">
+                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label><input type="text" value="${proj.members || ''}" list="member-suggestions" onchange="updateProjectInfo('members', this.value)" placeholder="Gõ tên (VD: Hà, Lan)..." class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Ngày bắt đầu</label>${startInput}</div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Deadline tổng</label>${deadlineInput}</div>
                         </div>
-                        <div class="flex items-center gap-2 mt-2 border-b border-slate-100 pb-2 overflow-x-auto">
+                        <div class="flex items-center gap-2 mt-4 border-b border-slate-100 pb-2 overflow-x-auto">
                             <button onclick="switchTab('tasks')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"><i class="fa-solid fa-list-check mr-1.5"></i> Công việc</button>
                             <button onclick="switchTab('gantt')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'gantt' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-indigo-600'}"><i class="fa-solid fa-chart-gantt mr-1.5"></i> Gantt Chart</button>
                             <button onclick="switchTab('costs')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'costs' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-100'}"><i class="fa-solid fa-wallet mr-1.5"></i> Chi phí</button>
