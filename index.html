@@ -299,9 +299,14 @@
                 querySnapshot.forEach((docSnap) => {
                     const data = docSnap.data();
                     const owner = (data.ownerEmail || '').trim().toLowerCase();
-                    const shared = (data.sharedEmails || []).map(e => e.trim().toLowerCase());
                     
-                    if (owner === userEmail || shared.includes(userEmail)) {
+                    // Xử lý quyền xem dựa vào owner hoặc thành viên trong "members"
+                    let memberEmails = [];
+                    if (data.members) {
+                        memberEmails = data.members.split(',').map(m => getEmailByNameOrInput(m).trim().toLowerCase());
+                    }
+                    
+                    if (owner === userEmail || memberEmails.includes(userEmail)) {
                         projects.push({ id: docSnap.id, ...data });
                     }
                 });
@@ -330,7 +335,6 @@
                 id: "proj_" + Date.now(),
                 name: 'Dự án mới',
                 ownerEmail: window.currentUser.email.trim().toLowerCase(),
-                sharedEmails: [],
                 members: '',
                 startDate: getTodayDisplay(),
                 deadline: '31/12/2026',
@@ -346,24 +350,9 @@
             const proj = projects.find(p => p.id === currentProjectId);
             if (proj) {
                 proj[field] = value;
-                if (field === 'members') {
-                    // TỰ ĐỘNG ĐỒNG BỘ: Chuyển toàn bộ tên thành viên hiển thị thành email để cập nhật quyền chia sẻ
-                    let rawList = value.split(',').map(e => e.trim()).filter(e => e !== '');
-                    let resolvedEmails = rawList.map(item => getEmailByNameOrInput(item));
-                    proj.sharedEmails = resolvedEmails;
-                }
                 await saveData();
                 renderProjectList();
                 renderMainContent();
-            }
-        }
-
-        async function updateSharedEmails(value) {
-            const proj = projects.find(p => p.id === currentProjectId);
-            if (proj) {
-                let rawList = value.split(',').map(e => e.trim()).filter(e => e !== '');
-                proj.sharedEmails = rawList.map(item => getEmailByNameOrInput(item));
-                await saveData();
             }
         }
 
@@ -618,7 +607,7 @@
             const isOwner = (proj.ownerEmail || '').trim().toLowerCase() === userEmail;
 
             // KIỂM TRA BẢO MẬT & PHÂN QUYỀN XEM CÔNG VIỆC:
-            // Chủ dự án (Owner) thấy tất cả. Thành viên được add vào chỉ thấy task do chính mình phụ trách.
+            // Chủ dự án thấy tất cả. Thành viên trong danh sách "Thành viên hiển thị" chỉ thấy task do chính mình phụ trách.
             let visibleTasks = proj.tasks;
             if (!isOwner) {
                 visibleTasks = proj.tasks.filter(task => {
@@ -862,7 +851,6 @@
 
             let startInput = renderCustomDateInput(proj.startDate, `updateProjectInfo('startDate', this.value)`, `proj_start_${proj.id}`);
             let deadlineInput = renderCustomDateInput(proj.deadline, `updateProjectInfo('deadline', this.value)`, `proj_deadline_${proj.id}`);
-            let sharedNamesVal = (proj.sharedEmails || []).map(e => getNameByEmail(e)).join(', ');
 
             mainEl.innerHTML = `
                 ${getAutocompleteDataList()}
@@ -878,15 +866,14 @@
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-4">
-                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label><input type="text" value="${proj.members || ''}" list="member-suggestions" onchange="updateProjectInfo('members', this.value)" placeholder="Gõ tên thành viên..." class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
+                            <div class="sm:col-span-1">
+                                <label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label>
+                                <input type="text" value="${proj.members || ''}" list="member-suggestions" onchange="updateProjectInfo('members', this.value)" placeholder="Gõ tên (VD: Hà, Lan)..." class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                            </div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Ngày bắt đầu</label>${startInput}</div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Deadline tổng</label>${deadlineInput}</div>
                         </div>
-                        <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                            <div class="text-xs font-semibold text-indigo-900 whitespace-nowrap"><i class="fa-solid fa-share-nodes mr-1"></i> Chia sẻ quyền (gõ tên hoặc email):</div>
-                            <input type="text" value="${sharedNamesVal}" list="member-suggestions" onchange="updateSharedEmails(this.value)" placeholder="Gõ tên (VD: Hà) hoặc email, cách nhau bằng dấu phẩy..." class="w-full flex-1 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-xs text-slate-700 focus:outline-none focus:border-indigo-600">
-                        </div>
-                        <div class="flex items-center gap-2 mt-4 border-b border-slate-100 pb-2 overflow-x-auto">
+                        <div class="flex items-center gap-2 mt-2 border-b border-slate-100 pb-2 overflow-x-auto">
                             <button onclick="switchTab('tasks')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"><i class="fa-solid fa-list-check mr-1.5"></i> Công việc</button>
                             <button onclick="switchTab('gantt')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'gantt' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-indigo-600'}"><i class="fa-solid fa-chart-gantt mr-1.5"></i> Gantt Chart</button>
                             <button onclick="switchTab('costs')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'costs' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-100'}"><i class="fa-solid fa-wallet mr-1.5"></i> Chi phí</button>
