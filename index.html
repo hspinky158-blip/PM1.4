@@ -156,7 +156,7 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v6')) || {};
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v7')) || {};
 
         function showCustomModal(title, htmlContent, iconClass = 'fa-bell', customActions = null) {
             document.getElementById('modal-title').innerText = title;
@@ -251,7 +251,7 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v6', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v7', JSON.stringify(memberRegistry));
         }
 
         function logActivity(proj, actionText) {
@@ -376,6 +376,9 @@
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
 
+            const userEmail = window.currentUser.email.trim().toLowerCase();
+            const isOwner = (proj.ownerEmail || '').trim().toLowerCase() === userEmail;
+
             let activitiesHtml = '';
             if (!proj.activities || proj.activities.length === 0) {
                 activitiesHtml = `<div class="text-center py-6 text-slate-400 text-xs italic">Chưa có hoạt động nào được ghi nhận.</div>`;
@@ -401,13 +404,18 @@
             let requestsHtml = '';
             if (proj.requests && proj.requests.length > 0) {
                 proj.requests.forEach(req => {
+                    // CHỈ CHỦ DỰ ÁN MỚI THẤY NÚT DUYỆT NGAY. NGƯỜI XEM SẼ KHÔNG CÓ NÚT NÀY.
+                    let approveBtn = isOwner ? `
+                        <button onclick="approveRequest(${req.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer">Duyệt ngay</button>
+                    ` : `<span class="text-[10px] text-slate-400 italic">Đang chờ Chủ dự án duyệt</span>`;
+
                     requestsHtml += `
                         <div class="bg-amber-50/70 border border-amber-200 p-3 rounded-xl mb-2 text-xs flex items-center justify-between gap-2">
                             <div>
                                 <span class="font-bold text-amber-900">${req.user}</span> xin cấp quyền chỉnh sửa lúc ${req.time}:
                                 <p class="text-amber-800 italic mt-0.5">"${req.reason}"</p>
                             </div>
-                            <button onclick="approveRequest(${req.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer">Duyệt ngay</button>
+                            ${approveBtn}
                         </div>
                     `;
                 });
@@ -429,6 +437,14 @@
         async function approveRequest(reqId) {
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
+            const userEmail = window.currentUser.email.trim().toLowerCase();
+            const isOwner = (proj.ownerEmail || '').trim().toLowerCase() === userEmail;
+
+            if (!isOwner) {
+                showCustomModal("Cảnh báo", "Chỉ Chủ dự án mới có quyền phê duyệt yêu cầu này!", "fa-triangle-exclamation");
+                return;
+            }
+
             const req = proj.requests.find(r => r.id === reqId);
             if (req) {
                 proj.requests = proj.requests.filter(r => r.id !== reqId);
