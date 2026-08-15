@@ -141,8 +141,9 @@
         let filterKeyword = '';
         let filterUrgency = 'all';
         let filterDeadline = '';
+        let memberSearchKeyword = ''; // Từ khóa tra cứu trong sổ danh bạ
 
-        // Sổ địa chỉ ánh xạ tên gọi với email
+        // Sổ địa chỉ danh bạ lưu trữ cục bộ
         let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry')) || {};
 
         function getEmailByNameOrInput(inputStr) {
@@ -179,23 +180,23 @@
             localStorage.setItem('hspinky_member_registry', JSON.stringify(memberRegistry));
         }
 
-        function promptManageMembers() {
-            let info = "SỔ ĐỊA CHỈ TÊN THÀNH VIÊN:\n";
-            for (let [name, email] of Object.entries(memberRegistry)) {
-                info += `- ${name}: ${email}\n`;
-            }
-            info += "\nNhập theo cú pháp: Tên | email@gmail.com\n(Ví dụ: Hà | hspinky158@gmail.com)";
-            let input = prompt(info);
-            if (input && input.includes('|')) {
-                let parts = input.split('|');
-                let name = parts[0].trim();
-                let email = parts[1].trim().toLowerCase();
-                if (name && email) {
-                    memberRegistry[name] = email;
-                    saveMemberRegistry();
-                    alert(`Đã lưu thành công: ${name} -> ${email}`);
-                    renderMainContent();
-                }
+        function addNewMemberFromPrompt() {
+            let name = prompt("Nhập tên thành viên (Ví dụ: Hà):");
+            if (!name || !name.trim()) return;
+            let email = prompt(`Nhập email tương ứng cho thành viên [${name.trim()}]:`);
+            if (!email || !email.trim()) return;
+
+            memberRegistry[name.trim()] = email.trim().toLowerCase();
+            saveMemberRegistry();
+            alert(`Đã thêm thành công: ${name.trim()} -> ${email.trim().toLowerCase()}`);
+            renderMainContent();
+        }
+
+        function deleteMemberRegistry(nameKey) {
+            if (confirm(`Bạn có chắc muốn xóa thành viên "${nameKey}" khỏi sổ danh bạ?`)) {
+                delete memberRegistry[nameKey];
+                saveMemberRegistry();
+                renderMainContent();
             }
         }
 
@@ -345,7 +346,14 @@
         async function updateProjectInfo(field, value) {
             const proj = projects.find(p => p.id === currentProjectId);
             if (proj) {
-                proj[field] = value;
+                if (field === 'members') {
+                    let rawList = value.split(',').map(e => e.trim()).filter(e => e !== '');
+                    let resolvedEmails = rawList.map(item => getEmailByNameOrInput(item));
+                    proj.members = value;
+                    proj.sharedEmails = resolvedEmails;
+                } else {
+                    proj[field] = value;
+                }
                 await saveData();
                 renderProjectList();
             }
@@ -395,7 +403,7 @@
             proj.tasks.push({
                 id: Date.now(),
                 name: 'Công việc mới',
-                assignee: 'Chưa phân công',
+                assignee: window.currentUser.email,
                 startDate: today,
                 deadline: today,
                 urgency: 'Thấp',
@@ -580,7 +588,6 @@
             });
         }
 
-        // Hộp gợi ý tách rời dùng DataList chuẩn của HTML5 (Giúp không bao giờ bị ngắt bàn phím)
         function getAutocompleteDataList() {
             let uniqueNames = new Set();
             for (let name of Object.keys(memberRegistry)) uniqueNames.add(name);
@@ -608,9 +615,19 @@
             if (!proj.tasks) proj.tasks = [];
             let tabContentHtml = '';
             const todayStr = getTodayDisplay();
+            const userEmail = window.currentUser.email.trim().toLowerCase();
+            const isOwner = (proj.ownerEmail || '').trim().toLowerCase() === userEmail;
+
+            let visibleTasks = proj.tasks;
+            if (!isOwner) {
+                visibleTasks = proj.tasks.filter(task => {
+                    let taskAssigneeEmail = (task.assignee || '').trim().toLowerCase();
+                    return taskAssigneeEmail === userEmail;
+                });
+            }
 
             if (currentTab === 'tasks') {
-                let filteredTasks = proj.tasks.filter(task => {
+                let filteredTasks = visibleTasks.filter(task => {
                     let assigneeName = getNameByEmail(task.assignee);
                     let matchKeyword = filterKeyword === '' || 
                         task.name.toLowerCase().includes(filterKeyword.toLowerCase()) || 
@@ -625,7 +642,7 @@
                 if (taskViewMode === 'table') {
                     let tasksHtml = '';
                     if (filteredTasks.length === 0) {
-                        tasksHtml = `<tr><td colspan="8" class="text-center py-8 text-slate-400 italic text-xs">Không tìm thấy công việc phù hợp với bộ lọc.</td></tr>`;
+                        tasksHtml = `<tr><td colspan="8" class="text-center py-8 text-slate-400 italic text-xs">Không có công việc nào được phân công cho bạn.</td></tr>`;
                     } else {
                         filteredTasks.forEach(task => {
                             let urgencyClass = 'bg-slate-100 text-slate-700';
@@ -763,15 +780,15 @@
             } 
             else if (currentTab === 'gantt') {
                 let ganttRows = '';
-                proj.tasks.forEach((task, index) => {
+                visibleTasks.forEach((task, index) => {
                     ganttRows += `<div class="grid grid-cols-12 gap-2 items-center py-2.5 border-b border-slate-100 text-xs md:text-sm"><div class="col-span-4 font-medium text-slate-800 truncate">${index + 1}. ${task.name}</div><div class="col-span-2 text-xs text-slate-500">${getNameByEmail(task.assignee)}</div><div class="col-span-6"><div class="w-full bg-indigo-50 h-7 rounded-lg flex items-center px-3 text-indigo-900 text-xs font-semibold"><i class="fa-regular fa-calendar-days mr-2 text-indigo-600"></i> Deadline: ${task.deadline || 'Chưa cập nhật'}</div></div></div>`;
                 });
-                tabContentHtml = `<div class="mb-4"><h2 class="font-bold text-base md:text-lg text-slate-800">Biểu Đồ Tiến Độ</h2></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto"><div class="min-w-[650px] space-y-2">${ganttRows || '<p class="text-xs text-slate-400">Chưa có công việc.</p>'}</div></div>`;
+                tabContentHtml = `<div class="mb-4"><h2 class="font-bold text-base md:text-lg text-slate-800">Biểu Đồ Tiến Độ</h2></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 overflow-x-auto"><div class="min-w-[650px] space-y-2">${ganttRows || '<p class="text-xs text-slate-400">Không có công việc nào.</p>'}</div></div>`;
             }
             else if (currentTab === 'costs') {
                 let totalCost = 0;
                 let costRows = '';
-                proj.tasks.forEach(t => {
+                visibleTasks.forEach(t => {
                     totalCost += Number(t.cost) || 0;
                     costRows += `<tr class="border-b border-slate-100 text-xs md:text-sm"><td class="p-3">${t.name}</td><td class="p-3">${getNameByEmail(t.assignee)}</td><td class="p-3"><input type="number" value="${t.cost || 0}" onchange="updateTask(${t.id}, 'cost', this.value)" class="w-32 bg-slate-50 px-2 py-1 rounded border text-indigo-600 font-semibold"> VNĐ</td></tr>`;
                 });
@@ -779,10 +796,68 @@
             }
             else if (currentTab === 'risks') {
                 let riskRows = '';
-                proj.tasks.forEach(task => {
+                visibleTasks.forEach(task => {
                     riskRows += `<tr class="border-b border-slate-100 align-top text-xs md:text-sm"><td class="p-3 font-medium">${task.name}</td><td class="p-3 space-y-2"><div><label class="block text-[10px] font-semibold text-amber-600 uppercase mb-1">Rủi ro:</label><textarea rows="2" onchange="updateTask(${task.id}, 'issue', this.value)" class="w-full bg-amber-50/50 p-2 rounded border border-amber-200 text-xs">${task.issue || ''}</textarea></div><div><label class="block text-[10px] font-semibold text-emerald-600 uppercase mb-1">Giải pháp:</label><textarea rows="2" onchange="updateTask(${task.id}, 'solution', this.value)" class="w-full bg-emerald-50/50 p-2 rounded border border-emerald-200 text-xs">${task.solution || ''}</textarea></div></td></tr>`;
                 });
                 tabContentHtml = `<div class="mb-4"><h2 class="font-bold text-base md:text-lg text-slate-800">Rủi Ro & Giải Pháp</h2></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto"><table class="w-full text-left border-collapse min-w-[550px]"><thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Công việc</th><th class="p-3">Nội dung</th></tr></thead><tbody>${riskRows}</tbody></table></div>`;
+            }
+            else if (currentTab === 'directory') {
+                // TAB QUẢN LÝ & TRA CỨU SỔ DANH BẠ THÀNH VIÊN
+                let filteredRegistry = Object.entries(memberRegistry).filter(([name, email]) => {
+                    let kw = memberSearchKeyword.toLowerCase();
+                    return name.toLowerCase().includes(kw) || email.toLowerCase().includes(kw);
+                });
+
+                let registryRows = '';
+                if (filteredRegistry.length === 0) {
+                    registryRows = `<tr><td colspan="3" class="text-center py-6 text-slate-400 italic text-xs">Chưa có thành viên nào trong sổ danh bạ hoặc không tìm thấy kết quả.</td></tr>`;
+                } else {
+                    filteredRegistry.forEach(([name, email]) => {
+                        registryRows += `
+                            <tr class="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
+                                <td class="p-3 font-semibold text-indigo-700">${name}</td>
+                                <td class="p-3 text-slate-600">${email}</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="deleteMemberRegistry('${name}')" class="text-slate-400 hover:text-red-500 p-1 transition cursor-pointer" title="Xóa thành viên">
+                                        <i class="fa-solid fa-trash-can text-xs"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                tabContentHtml = `
+                    <div class="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div>
+                            <h2 class="font-bold text-base md:text-lg text-slate-800">Danh Sách Thành Viên & Email Đã Lưu</h2>
+                            <p class="text-xs text-slate-500">Tra cứu và quản lý các tên gọi rút gọn ánh xạ với email thực tế.</p>
+                        </div>
+                        <button onclick="addNewMemberFromPrompt()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer">
+                            <i class="fa-solid fa-user-plus"></i> Thêm thành viên mới
+                        </button>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-4">
+                        <div class="relative max-w-md">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                            <input type="text" value="${memberSearchKeyword}" oninput="memberSearchKeyword=this.value; renderMainContent();" placeholder="Tra cứu theo tên hoặc email thành viên..." class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                        <table class="w-full text-left border-collapse min-w-[500px]">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                                    <th class="p-3">Tên hiển thị</th>
+                                    <th class="p-3">Địa chỉ Email</th>
+                                    <th class="p-3 text-center">Xóa</th>
+                                </tr>
+                            </thead>
+                            <tbody>${registryRows}</tbody>
+                        </table>
+                    </div>
+                `;
             }
 
             let startInput = renderCustomDateInput(proj.startDate, `updateProjectInfo('startDate', this.value)`, `proj_start_${proj.id}`);
@@ -799,12 +874,11 @@
                                 <input type="text" value="${proj.name}" onchange="updateProjectInfo('name', this.value)" class="w-full text-xl md:text-2xl font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none py-1">
                             </div>
                             <div class="flex items-center gap-2">
-                                <button onclick="promptManageMembers()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold px-3 py-2.5 rounded-xl transition cursor-pointer border border-indigo-200" title="Đặt tên cho Email thành viên"><i class="fa-solid fa-address-book mr-1"></i> Sổ Danh Bạ</button>
                                 <button onclick="exportProjectReport()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-file-arrow-down"></i> Xuất Báo Cáo</button>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-4">
-                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label><input type="text" value="${proj.members}" onchange="updateProjectInfo('members', this.value)" class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
+                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label><input type="text" value="${proj.members || ''}" list="member-suggestions" onchange="updateProjectInfo('members', this.value)" placeholder="Gõ tên thành viên..." class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Ngày bắt đầu</label>${startInput}</div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Deadline tổng</label>${deadlineInput}</div>
                         </div>
@@ -817,6 +891,7 @@
                             <button onclick="switchTab('gantt')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'gantt' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-indigo-600'}"><i class="fa-solid fa-chart-gantt mr-1.5"></i> Gantt Chart</button>
                             <button onclick="switchTab('costs')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'costs' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-100'}"><i class="fa-solid fa-wallet mr-1.5"></i> Chi phí</button>
                             <button onclick="switchTab('risks')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'risks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-100'}"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Rủi ro</button>
+                            <button onclick="switchTab('directory')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'directory' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-100'}"><i class="fa-solid id-card mr-1.5"></i> Sổ Danh Bạ Thành Viên</button>
                         </div>
                     </div>
                 </div>
