@@ -156,7 +156,7 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v10')) || {};
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v11')) || {};
 
         function showCustomModal(title, htmlContent, iconClass = 'fa-bell', customActions = null) {
             document.getElementById('modal-title').innerText = title;
@@ -251,7 +251,7 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v10', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v11', JSON.stringify(memberRegistry));
         }
 
         function logActivity(proj, actionText) {
@@ -373,7 +373,6 @@
             }
         }
 
-        // BẤM VÀO QUẢ CHUÔNG: ĐÁNH DẤU VIEWED VÀ LƯU LÊN FIREBASE ĐỂ SỐ ĐỎ BIẾN MẤT VĨNH VIỄN
         async function openActivityLogModal() {
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
@@ -435,8 +434,8 @@
                 });
             }
 
-            let clearAllBtn = (proj.activities.length > 0 || (proj.requests && proj.requests.length > 0)) ? `
-                <div class="flex justify-end mb-2">
+            let clearAllBtn = ((proj.activities && proj.activities.length > 0) || (proj.requests && proj.requests.length > 0)) ? `
+                <div class="flex justify-end mb-3">
                     <button onclick="clearAllNotifications()" class="text-red-500 hover:text-red-700 text-xs font-semibold flex items-center gap-1 cursor-pointer bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">
                         <i class="fa-solid fa-trash-can"></i> Xóa toàn bộ thông báo
                     </button>
@@ -446,7 +445,7 @@
             let htmlContent = `
                 <div class="w-full text-left space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                     ${clearAllBtn}
-                    ${requestsHtml ? `<div><h4 class="font-bold text-xs text-amber-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Yêu cầu cấp quyền chờ duyệt</h4>${requestsHtml}</div>` : ''}
+                    ${requestsHtml ? `<div><h4 class="font-bold text-xs text-amber-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Yêu cầu cấp quyền chờ duyệt</h4><div class="space-y-1">${requestsHtml}</div></div>` : ''}
                     <div>
                         <h4 class="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Nhật ký thay đổi theo thời gian thực</h4>
                         <div class="space-y-1">${activitiesHtml}</div>
