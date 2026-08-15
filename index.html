@@ -143,17 +143,55 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v3')) || {};
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v4')) || {};
 
         function parseMemberInput(inputStr) {
             if (!inputStr) return { name: '', email: '' };
             let raw = inputStr.trim();
-            // Xử lý dạng "Tên (email)" hoặc "tên (EMAIL)"
             let match = raw.match(/^(.*?)\s*\((.*?)\)$/);
             if (match) {
                 return { name: match[1].trim(), email: match[2].trim().toLowerCase() };
             }
+            if (raw.includes('@')) {
+                let parts = raw.split('@');
+                let inferredName = parts[0].trim();
+                return { name: inferredName, email: raw.toLowerCase() };
+            }
             return { name: raw, email: '' };
+        }
+
+        function processBatchMembers(inputStr) {
+            if (!inputStr) return;
+            // Cho phép phân tách bằng dấu phẩy hoặc xuống dòng
+            let lines = inputStr.split(/,|\n/);
+            let addedCount = 0;
+
+            lines.forEach(line => {
+                let cleanedLine = line.trim();
+                if (!cleanedLine) return;
+                let parsed = parseMemberInput(cleanedLine);
+                if (parsed.name && parsed.email) {
+                    if (!memberRegistry[parsed.name]) {
+                        memberRegistry[parsed.name] = { email: parsed.email, role: 'xem' };
+                        addedCount++;
+                    }
+                }
+            });
+
+            if (addedCount > 0) {
+                saveMemberRegistry();
+                alert(`Đã thêm nhanh thành công ${addedCount} thành viên vào sổ danh bạ!`);
+                renderMainContent();
+            } else {
+                // Nếu chỉ nhập 1 người theo kiểu form thông thường
+                let name = prompt("Nhập tên hiển thị cho thành viên:", parsedName || "");
+                if (!name || !name.trim()) return;
+                let email = prompt(`Nhập email cho thành viên [${name.trim()}]:`, cleanedLine);
+                if (!email || !email.trim()) return;
+                memberRegistry[name.trim()] = { email: email.trim().toLowerCase(), role: 'xem' };
+                saveMemberRegistry();
+                renderMainContent();
+            }
         }
 
         function getEmailByNameOrInput(inputStr) {
@@ -207,8 +245,10 @@
                     
                     if (emailMapped === userEmail) {
                         let cleanName = parsed.name.toLowerCase();
-                        if (memberRegistry[cleanName] && memberRegistry[cleanName].role === 'chinhsua') {
-                            return 'editor';
+                        for (let [regName, regData] of Object.entries(memberRegistry)) {
+                            if (regName.toLowerCase() === cleanName && regData.role === 'chinhsua') {
+                                return 'editor';
+                            }
                         }
                     }
                 }
@@ -217,21 +257,40 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v3', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v4', JSON.stringify(memberRegistry));
         }
 
         function addNewMemberFromPrompt() {
-            let name = prompt("Nhập tên thành viên (Ví dụ: Hoàng):");
-            if (!name || !name.trim()) return;
-            let email = prompt(`Nhập email tương ứng cho thành viên [${name.trim()}]:`);
-            if (!email || !email.trim()) return;
-            let roleInput = prompt(`Phân quyền cho [${name.trim()}]: Nhập '1' nếu là Xem, nhập '2' nếu là Chỉnh sửa:`, "1");
-            let role = (roleInput === '2') ? 'chinhsua' : 'xem';
+            let input = prompt("Nhập thông tin thành viên.\n- Cú pháp: Tên (email)\n- Hoặc dán danh sách nhiều người (cách nhau bằng dấu phẩy hoặc xuống dòng):");
+            if (!input || !input.trim()) return;
 
-            memberRegistry[name.trim()] = { email: email.trim().toLowerCase(), role: role };
-            saveMemberRegistry();
-            alert(`Đã lưu thành viên: ${name.trim()} (${role === 'chinhsua' ? 'Chỉnh sửa' : 'Xem'})`);
-            renderMainContent();
+            let lines = input.split(/,|\n/);
+            let addedCount = 0;
+
+            lines.forEach(line => {
+                let cleaned = line.trim();
+                if (!cleaned) return;
+                let parsed = parseMemberInput(cleaned);
+                if (parsed.name && parsed.email) {
+                    memberRegistry[parsed.name] = { email: parsed.email, role: 'xem' };
+                    addedCount++;
+                }
+            });
+
+            if (addedCount > 0) {
+                saveMemberRegistry();
+                alert(`Đã thêm thành công ${addedCount} thành viên vào sổ danh bạ!`);
+                renderMainContent();
+            } else {
+                let singleName = prompt("Nhập tên hiển thị cho thành viên:", input);
+                if (!singleName || !singleName.trim()) return;
+                let singleEmail = prompt(`Nhập email cho thành viên [${singleName.trim()}]:`);
+                if (!singleEmail || !singleEmail.trim()) return;
+                memberRegistry[singleName.trim()] = { email: singleEmail.trim().toLowerCase(), role: 'xem' };
+                saveMemberRegistry();
+                alert(`Đã thêm thành công thành viên: ${singleName.trim()}`);
+                renderMainContent();
+            }
         }
 
         function updateRegistryMemberRole(nameKey, newRole) {
@@ -405,6 +464,20 @@
                 alert("Bạn chỉ có quyền xem, không thể thay đổi thông tin dự án!");
                 renderMainContent();
                 return;
+            }
+
+            // Tự động thêm các thành viên mới nhập vào sổ danh bạ nếu chưa có
+            if (field === 'members') {
+                let items = value.split(',');
+                items.forEach(item => {
+                    let parsed = parseMemberInput(item.trim());
+                    if (parsed.name && parsed.email) {
+                        if (!memberRegistry[parsed.name]) {
+                            memberRegistry[parsed.name] = { email: parsed.email, role: 'xem' };
+                        }
+                    }
+                });
+                saveMemberRegistry();
             }
 
             proj[field] = value;
@@ -696,7 +769,7 @@
             let tabContentHtml = '';
             const todayStr = getTodayDisplay();
             const userEmail = window.currentUser.email.trim().toLowerCase();
-            const role = getUserProjectRole(proj); // 'owner', 'editor', 'viewer'
+            const role = getUserProjectRole(proj);
             const isViewer = role === 'viewer';
 
             let visibleTasks = proj.tasks;
@@ -924,10 +997,10 @@
                     <div class="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <div>
                             <h2 class="font-bold text-base md:text-lg text-slate-800">Danh Sách Thành Viên & Phân Quyền</h2>
-                            <p class="text-xs text-slate-500">Chủ dự án có thể phân quyền "Xem" hoặc "Chỉnh sửa" trực tiếp cho từng thành viên tại đây.</p>
+                            <p class="text-xs text-slate-500">Chủ dự án có thể thêm hàng loạt và phân quyền nhanh chóng tại đây.</p>
                         </div>
                         <button onclick="addNewMemberFromPrompt()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer">
-                            <i class="fa-solid fa-user-plus"></i> Thêm thành viên mới
+                            <i class="fa-solid fa-user-plus"></i> Thêm thành viên hàng loạt
                         </button>
                     </div>
 
