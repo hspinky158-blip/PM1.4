@@ -125,7 +125,6 @@
     </div>
 
     <script>
-        // Đăng ký Service Worker để bật thông báo và hỗ trợ PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
@@ -137,23 +136,31 @@
         let projects = [];
         let currentProjectId = null;
         let currentTab = 'tasks';
-        let taskViewMode = 'table'; // 'table' hoặc 'kanban'
+        let taskViewMode = 'table';
         
-        // Bộ lọc nâng cao
         let filterKeyword = '';
-        let filterAssignee = 'all';
         let filterUrgency = 'all';
         let filterDeadline = '';
 
-        // Sổ địa chỉ ánh xạ tên gọi với email (Lưu trữ cục bộ localStorage)
+        // Sổ địa chỉ ánh xạ tên gọi với email
         let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry')) || {};
 
         function getEmailByNameOrInput(inputStr) {
             let clean = inputStr.trim().toLowerCase();
+            if (!clean) return '';
+            // Kiểm tra trong danh bạ
             for (let [name, email] of Object.entries(memberRegistry)) {
                 if (name.toLowerCase() === clean) return email;
             }
-            return inputStr; // Nếu không có trong danh bạ thì giữ nguyên giả sử đó là email
+            // Nếu chính tài khoản đang đăng nhập gõ tên viết tắt
+            if (window.currentUser && window.currentUser.email) {
+                let currentEmail = window.currentUser.email.trim().toLowerCase();
+                let usernamePart = currentEmail.split('@')[0];
+                if (clean === usernamePart || clean === 'tôi' || clean === 'me') {
+                    return currentEmail;
+                }
+            }
+            return inputStr;
         }
 
         function getNameByEmail(emailStr) {
@@ -162,7 +169,12 @@
             for (let [name, email] of Object.entries(memberRegistry)) {
                 if (email.toLowerCase() === clean) return name;
             }
-            return emailStr; // Mặc định trả về email nếu chưa đặt tên
+            if (window.currentUser && window.currentUser.email) {
+                if (clean === window.currentUser.email.trim().toLowerCase()) {
+                    return window.currentUser.displayName || clean.split('@')[0];
+                }
+            }
+            return emailStr;
         }
 
         function saveMemberRegistry() {
@@ -170,11 +182,11 @@
         }
 
         function promptManageMembers() {
-            let info = "DANH BẠ TÊN & EMAIL THÀNH VIÊN:\n";
+            let info = "SỔ ĐỊA CHỈ TÊN THÀNH VIÊN:\n";
             for (let [name, email] of Object.entries(memberRegistry)) {
                 info += `- ${name}: ${email}\n`;
             }
-            info += "\nNhập TÊN mới theo định dạng: Tên | email@gmail.com";
+            info += "\nNhập theo cú pháp: Tên | email@gmail.com\n(Ví dụ: Hà | hspinky158@gmail.com)";
             let input = prompt(info);
             if (input && input.includes('|')) {
                 let parts = input.split('|');
@@ -196,7 +208,7 @@
                     new Notification("Đã kích hoạt thông báo!", { body: "Bạn sẽ nhận được cảnh báo khi có công việc đến hạn." });
                     checkTaskDeadlines();
                 } else {
-                    alert("Trình duyệt của bạn không hỗ trợ thông báo trên trình duyệt.");
+                    alert("Bạn cần cấp quyền thông báo trên trình duyệt.");
                 }
             } else {
                 alert("Trình duyệt không hỗ trợ.");
@@ -338,7 +350,7 @@
                 proj[field] = value;
                 await saveData();
                 renderProjectList();
-                renderMainContent();
+                // Không gọi renderMainContent trực tiếp nếu đang gõ thanh tìm kiếm để tránh mất focus
             }
         }
 
@@ -407,14 +419,13 @@
             const task = proj.tasks.find(t => t.id === taskId);
             if (task) {
                 if (field === 'assignee') {
-                    task[field] = getEmailByNameOrInput(value); // Hỗ trợ gõ tên tự đổi thành email trong DB
+                    task[field] = getEmailByNameOrInput(value);
                 } else if (field === 'cost') {
                     task[field] = parseFloat(value) || 0;
                 } else {
                     task[field] = value;
                 }
                 await saveData();
-                renderMainContent();
             }
         }
 
@@ -572,7 +583,7 @@
             });
         }
 
-        // Xử lý Gợi ý Tên / Dự án (Autocomplete Suggestions)
+        // Gợi ý Autocomplete thông minh không làm gián đoạn bàn phím
         function showSuggestions(inputEl, type) {
             let val = inputEl.value.trim().toLowerCase();
             let parent = inputEl.parentElement;
@@ -606,7 +617,7 @@
                 item.innerText = m;
                 item.onmousedown = () => {
                     inputEl.value = m;
-                    inputEl.dispatchEvent(new Event('input'));
+                    inputEl.dispatchEvent(new Event('change'));
                     box.remove();
                 };
                 box.appendChild(item);
@@ -630,7 +641,6 @@
             const todayStr = getTodayDisplay();
 
             if (currentTab === 'tasks') {
-                // Bộ lọc nâng cao: Tìm kiếm theo từ khóa task/phụ trách, mức ưu tiên, và deadline
                 let filteredTasks = proj.tasks.filter(task => {
                     let assigneeName = getNameByEmail(task.assignee);
                     let matchKeyword = filterKeyword === '' || 
@@ -692,7 +702,7 @@
                             <div class="flex flex-wrap items-center gap-2 flex-1">
                                 <div class="relative flex-1 min-w-[180px]">
                                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-                                    <input type="text" value="${filterKeyword}" oninput="filterKeyword=this.value; showSuggestions(this, 'assignee'); renderMainContent();" placeholder="Tìm kiếm tên, việc, người phụ trách..." class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
+                                    <input type="text" id="search-input-box" value="${filterKeyword}" oninput="filterKeyword=this.value; showSuggestions(this, 'assignee');" onchange="renderMainContent();" placeholder="Tìm kiếm tên, việc, người phụ trách..." class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
                                 </div>
                                 <select onchange="filterUrgency=this.value; renderMainContent();" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none">
                                     <option value="all">Tất cả ưu tiên</option>
@@ -763,7 +773,7 @@
                             <div class="flex flex-wrap items-center gap-2 flex-1">
                                 <div class="relative flex-1 min-w-[200px]">
                                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-                                    <input type="text" value="${filterKeyword}" oninput="filterKeyword=this.value; renderMainContent();" placeholder="Tìm kiếm công việc..." class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
+                                    <input type="text" value="${filterKeyword}" oninput="filterKeyword=this.value;" onchange="renderMainContent();" placeholder="Tìm kiếm công việc..." class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
@@ -817,7 +827,7 @@
                                 <input type="text" value="${proj.name}" oninput="showSuggestions(this, 'project')" onchange="updateProjectInfo('name', this.value)" class="w-full text-xl md:text-2xl font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none py-1">
                             </div>
                             <div class="flex items-center gap-2">
-                                <button onclick="promptManageMembers()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold px-3 py-2.5 rounded-xl transition cursor-pointer border border-indigo-200" title="Đặt tên cho Email thành viên"><i class="fa-solid fa-address-book mr-1"></i> Quản lý Sổ Danh Bạ</button>
+                                <button onclick="promptManageMembers()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold px-3 py-2.5 rounded-xl transition cursor-pointer border border-indigo-200" title="Đặt tên cho Email thành viên"><i class="fa-solid fa-address-book mr-1"></i> Sổ Danh Bạ</button>
                                 <button onclick="exportProjectReport()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-file-arrow-down"></i> Xuất Báo Cáo</button>
                             </div>
                         </div>
@@ -828,7 +838,7 @@
                         </div>
                         <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
                             <div class="text-xs font-semibold text-indigo-900 whitespace-nowrap"><i class="fa-solid fa-share-nodes mr-1"></i> Chia sẻ quyền (gõ tên hoặc email):</div>
-                            <input type="text" value="${sharedNamesVal}" onchange="updateSharedEmails(this.value)" placeholder="Gõ tên (VD: Dương) hoặc email, cách nhau bằng dấu phẩy..." class="w-full flex-1 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-xs text-slate-700 focus:outline-none focus:border-indigo-600">
+                            <input type="text" value="${sharedNamesVal}" onchange="updateSharedEmails(this.value)" placeholder="Gõ tên (VD: Hà) hoặc email, cách nhau bằng dấu phẩy..." class="w-full flex-1 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 text-xs text-slate-700 focus:outline-none focus:border-indigo-600">
                         </div>
                         <div class="flex items-center gap-2 mt-4 border-b border-slate-100 pb-2 overflow-x-auto">
                             <button onclick="switchTab('tasks')" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${currentTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"><i class="fa-solid fa-list-check mr-1.5"></i> Công việc</button>
