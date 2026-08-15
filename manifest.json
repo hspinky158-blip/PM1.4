@@ -4,11 +4,18 @@
   "display": "standalone",
   "name": "hspinky158-blip.github",
   "orientation": "portrait",
-  "scope": "/",
-  "short_name": "hspinky158-blip.github",
-  "start_url": "/",
+  "scope": "/PM1.4/",
+  "short_name": "hspinky158",
+  "start_url": "/PM1.4/",
   "theme_color": "#76d8d6",
-  "id": "Project Management",
+  "id": "/PM1.4/",
   "description": "A to the B to the C to the H bo m la Ha",
-  "lang": "vi"
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3119/3119338.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
