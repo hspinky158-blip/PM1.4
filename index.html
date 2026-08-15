@@ -72,7 +72,20 @@
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+<body class="bg-slate-50 text-slate-800 font-sans antialiased relative">
+
+    <div id="custom-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 border border-slate-100 text-center animate-in fade-in zoom-in duration-200">
+            <div id="modal-icon-container" class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4 text-xl">
+                <i id="modal-icon" class="fa-solid fa-bell"></i>
+            </div>
+            <h3 id="modal-title" class="font-bold text-slate-900 text-base mb-2">Thông báo</h3>
+            <p id="modal-message" class="text-xs text-slate-600 mb-6 leading-relaxed">Nội dung thông báo...</p>
+            <div id="modal-actions" class="flex gap-2 justify-center">
+                <button onclick="closeCustomModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition w-full cursor-pointer">Đã hiểu</button>
+            </div>
+        </div>
+    </div>
 
     <div id="auth-screen" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center border border-slate-100">
@@ -143,7 +156,25 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v5')) || {};
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v6')) || {};
+
+        function showCustomModal(title, message, iconClass = 'fa-bell', customActions = null) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerText = message;
+            document.getElementById('modal-icon').className = `fa-solid ${iconClass}`;
+            
+            const actionsEl = document.getElementById('modal-actions');
+            if (customActions) {
+                actionsEl.innerHTML = customActions;
+            } else {
+                actionsEl.innerHTML = `<button onclick="closeCustomModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition w-full cursor-pointer">Đã hiểu</button>`;
+            }
+            document.getElementById('custom-modal').classList.remove('hidden');
+        }
+
+        function closeCustomModal() {
+            document.getElementById('custom-modal').classList.add('hidden');
+        }
 
         function parseMemberInput(inputStr) {
             if (!inputStr) return { name: '', email: '' };
@@ -220,14 +251,43 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v5', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v6', JSON.stringify(memberRegistry));
+        }
+
+        function logActivity(proj, actionText) {
+            if (!proj.activities) proj.activities = [];
+            const d = new Date();
+            const timeStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            const userName = window.currentUser.displayName || window.currentUser.email.split('@')[0];
+            
+            proj.activities.unshift({
+                id: Date.now(),
+                time: timeStr,
+                user: userName,
+                content: actionText
+            });
+            // Giữ tối đa 50 hoạt động gần nhất
+            if (proj.activities.length > 50) proj.activities.pop();
         }
 
         function addNewMemberFromPrompt() {
-            let input = prompt("Nhập thông tin thành viên (Cú pháp: Tên (email)):");
-            if (!input || !input.trim()) return;
+            let actions = `
+                <div class="w-full space-y-3">
+                    <textarea id="batch-member-input" rows="3" placeholder="Nhập theo cú pháp: Tên (email)&#10;Ví dụ: Hoàng (prodoggy2@gmail.com)" class="w-full text-xs p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 bg-slate-50"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="submitBatchMembers()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">Thêm vào danh bạ</button>
+                        <button onclick="closeCustomModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">Hủy</button>
+                    </div>
+                </div>
+            `;
+            showCustomModal("Thêm Thành Viên & Email", "Bạn có thể nhập danh sách thành viên mới theo định dạng Tên (email):", "fa-user-plus", actions);
+        }
 
-            let lines = input.split(/,|\n/);
+        function submitBatchMembers() {
+            const inputVal = document.getElementById('batch-member-input').value;
+            if (!inputVal || !inputVal.trim()) return;
+
+            let lines = inputVal.split(/,|\n/);
             let addedCount = 0;
 
             lines.forEach(line => {
@@ -240,19 +300,13 @@
                 }
             });
 
+            closeCustomModal();
             if (addedCount > 0) {
                 saveMemberRegistry();
-                alert(`Đã thêm thành công ${addedCount} thành viên!`);
+                showCustomModal("Thành công", `Đã thêm thành công ${addedCount} thành viên vào sổ danh bạ!`, "fa-circle-check");
                 renderMainContent();
             } else {
-                let singleName = prompt("Nhập tên hiển thị:", input);
-                if (!singleName || !singleName.trim()) return;
-                let singleEmail = prompt(`Nhập email cho [${singleName.trim()}]:`);
-                if (!singleEmail || !singleEmail.trim()) return;
-                memberRegistry[singleName.trim()] = { email: singleEmail.trim().toLowerCase(), role: 'xem' };
-                saveMemberRegistry();
-                alert(`Đã thêm thành công: ${singleName.trim()}`);
-                renderMainContent();
+                showCustomModal("Lỗi cú pháp", "Vui lòng nhập đúng định dạng: Tên (email)", "fa-triangle-exclamation");
             }
         }
 
@@ -265,21 +319,125 @@
         }
 
         function deleteMemberRegistry(nameKey) {
-            if (confirm(`Bạn có chắc muốn xóa thành viên "${nameKey}" khỏi sổ danh bạ?`)) {
-                delete memberRegistry[nameKey];
-                saveMemberRegistry();
+            let actions = `
+                <div class="flex gap-2 w-full">
+                    <button onclick="confirmDeleteMember('${nameKey}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">Xóa</button>
+                    <button onclick="closeCustomModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">Hủy</button>
+                </div>
+            `;
+            showCustomModal("Xác nhận xóa", `Bạn có chắc muốn xóa thành viên "${nameKey}" khỏi sổ danh bạ?`, "fa-trash-can", actions);
+        }
+
+        function confirmDeleteMember(nameKey) {
+            delete memberRegistry[nameKey];
+            saveMemberRegistry();
+            closeCustomModal();
+            renderMainContent();
+        }
+
+        // XỬ LÝ XIN CẤP QUYỀN CHO NGƯỜI XEM (VIEWER)
+        function handleViewerAttemptEdit() {
+            let actions = `
+                <div class="w-full space-y-3">
+                    <input type="text" id="request-reason" placeholder="Nhập lý do xin chỉnh sửa (Ví dụ: Cập nhật lại tiến độ công việc...)" class="w-full text-xs p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-600 bg-slate-50">
+                    <div class="flex gap-2">
+                        <button onclick="submitPermissionRequest()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">Gửi yêu cầu</button>
+                        <button onclick="closeCustomModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">Đóng</button>
+                    </div>
+                </div>
+            `;
+            showCustomModal("Yêu cầu cấp quyền chỉnh sửa", "Bạn đang có quyền 'Xem'. Hãy gửi yêu cầu kèm lý do đến Chủ dự án:", "fa-lock", actions);
+        }
+
+        async function submitPermissionRequest() {
+            const reason = document.getElementById('request-reason').value || "Cần chỉnh sửa nội dung dự án";
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (proj) {
+                if (!proj.requests) proj.requests = [];
+                const d = new Date();
+                const timeStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                const userName = window.currentUser.displayName || window.currentUser.email.split('@')[0];
+
+                proj.requests.unshift({
+                    id: Date.now(),
+                    time: timeStr,
+                    user: userName,
+                    reason: reason
+                });
+
+                logActivity(proj, `Gửi yêu cầu cấp quyền chỉnh sửa: "${reason}"`);
+                await saveData();
+                closeCustomModal();
+                showCustomModal("Đã gửi yêu cầu", "Yêu cầu cấp quyền của bạn đã được chuyển đến Chủ dự án thành công!", "fa-paper-plane");
                 renderMainContent();
             }
         }
 
-        // HÀM XỬ LÝ KHI NGƯỜI XEM (VIEWER) CỐ GẮNG CHỈNH SỬA -> HIỆN THÔNG BÁO XIN CẤP QUYỀN
-        function handleViewerAttemptEdit() {
-            const confirmRequest = confirm(
-                "⚠️ Bạn đang có quyền 'Xem' nên không thể trực tiếp thay đổi nội dung này.\n\n" +
-                "Bạn có muốn gửi yêu cầu cấp quyền 'Chỉnh sửa' đến Chủ dự án ngay lập tức không?"
-            );
-            if (confirmRequest) {
-                alert("📤 Đã gửi yêu cầu xin cấp quyền chỉnh sửa thành công đến Chủ dự án! Vui lòng chờ chủ dự án phê duyệt.");
+        // MỞ BẢNG XEM NHẬT KÝ THAY ĐỔI & YÊU CẦU (BẤM VÀO HÌNH QUẢ CHUÔNG)
+        function openActivityLogModal() {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (!proj) return;
+
+            let activitiesHtml = '';
+            if (!proj.activities || proj.activities.length === 0) {
+                activitiesHtml = `<div class="text-center py-6 text-slate-400 text-xs italic">Chưa có hoạt động nào được ghi nhận.</div>`;
+            } else {
+                proj.activities.forEach(act => {
+                    activitiesHtml += `
+                        <div class="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-50 transition border-b border-slate-100 text-xs">
+                            <div class="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 font-bold text-[10px] mt-0.5">
+                                ${act.user.charAt(0).toUpperCase()}
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-slate-800">${act.user}</span>
+                                    <span class="text-[10px] text-slate-400"><i class="fa-regular fa-clock mr-1"></i>${act.time}</span>
+                                </div>
+                                <p class="text-slate-600 mt-0.5">${act.content}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            let requestsHtml = '';
+            if (proj.requests && proj.requests.length > 0) {
+                proj.requests.forEach(req => {
+                    requestsHtml += `
+                        <div class="bg-amber-50/70 border border-amber-200 p-3 rounded-xl mb-2 text-xs flex items-center justify-between gap-2">
+                            <div>
+                                <span class="font-bold text-amber-900">${req.user}</span> xin cấp quyền chỉnh sửa lúc ${req.time}:
+                                <p class="text-amber-800 italic mt-0.5">"${req.reason}"</p>
+                            </div>
+                            <button onclick="approveRequest(${req.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer">Duyệt ngay</button>
+                        </div>
+                    `;
+                });
+            }
+
+            let htmlContent = `
+                <div class="w-full text-left space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                    ${requestsHtml ? `<div><h4 class="font-bold text-xs text-amber-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Yêu cầu cấp quyền chờ duyệt</h4>${requestsHtml}</div>` : ''}
+                    <div>
+                        <h4 class="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Nhật ký thay đổi theo thời gian thực</h4>
+                        <div class="space-y-1">${activitiesHtml}</div>
+                    </div>
+                </div>
+            `;
+
+            showCustomModal("Thông Báo & Hoạt Động Thời Gian Thực", htmlContent, "fa-bell", `<button onclick="closeCustomModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition w-full cursor-pointer">Đóng</button>`);
+        }
+
+        async function approveRequest(reqId) {
+            const proj = projects.find(p => p.id === currentProjectId);
+            if (!proj) return;
+            const req = proj.requests.find(r => r.id === reqId);
+            if (req) {
+                proj.requests = proj.requests.filter(r => r.id !== reqId);
+                logActivity(proj, `Đã phê duyệt quyền chỉnh sửa cho ${req.user}`);
+                await saveData();
+                closeCustomModal();
+                showCustomModal("Thành công", `Đã phê duyệt yêu cầu cấp quyền cho ${req.user}!`, "fa-circle-check");
             }
         }
 
@@ -287,13 +445,13 @@
             if ("Notification" in window) {
                 const permission = await Notification.requestPermission();
                 if (permission === "granted") {
-                    new Notification("Đã kích hoạt thông báo!", { body: "Bạn sẽ nhận được cảnh báo khi có công việc đến hạn." });
+                    showCustomModal("Thành công", "Bạn đã kích hoạt thông báo thành công!", "fa-circle-check");
                     checkTaskDeadlines();
                 } else {
-                    alert("Bạn cần cấp quyền thông báo trên trình duyệt.");
+                    showCustomModal("Thông báo", "Bạn cần cấp quyền thông báo trên trình duyệt.", "fa-triangle-exclamation");
                 }
             } else {
-                alert("Trình duyệt không hỗ trợ.");
+                showCustomModal("Thông báo", "Trình duyệt không hỗ trợ thông báo.", "fa-triangle-exclamation");
             }
         }
 
@@ -421,8 +579,11 @@
                 members: '',
                 startDate: getTodayDisplay(),
                 deadline: '31/12/2026',
-                tasks: []
+                tasks: [],
+                activities: [],
+                requests: []
             };
+            logActivity(newProj, 'Đã tạo dự án mới');
             projects.push(newProj);
             currentProjectId = newProj.id;
             await saveData();
@@ -454,6 +615,7 @@
             }
 
             proj[field] = value;
+            logActivity(proj, `Cập nhật thông tin dự án (${field})`);
             await saveData();
             renderProjectList();
             renderMainContent();
@@ -464,18 +626,28 @@
             const proj = projects.find(p => p.id === id);
             const userEmail = window.currentUser.email.trim().toLowerCase();
             if (proj && proj.ownerEmail && proj.ownerEmail !== userEmail) {
-                alert("Chỉ người tạo ra dự án mới có quyền xóa dự án này!");
+                showCustomModal("Thông báo", "Chỉ người tạo ra dự án mới có quyền xóa dự án này!", "fa-triangle-exclamation");
                 return;
             }
-            if(confirm('Bạn có chắc muốn xóa dự án này trên Cloud?')) {
-                try {
-                    await window.deleteDoc(window.doc(window.db, "projects", String(id)));
-                    projects = projects.filter(p => p.id !== id);
-                    currentProjectId = projects.length > 0 ? projects[0].id : null;
-                    renderApp();
-                } catch (error) {
-                    console.error("Lỗi xóa dự án:", error);
-                }
+
+            let actions = `
+                <div class="flex gap-2 w-full">
+                    <button onclick="confirmDeleteProj('${id}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">Xóa</button>
+                    <button onclick="closeCustomModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-xl transition cursor-pointer">Hủy</button>
+                </div>
+            `;
+            showCustomModal("Xác nhận xóa", "Bạn có chắc muốn xóa vĩnh viễn dự án này trên Cloud?", "fa-trash-can", actions);
+        }
+
+        async function confirmDeleteProj(id) {
+            try {
+                await window.deleteDoc(window.doc(window.db, "projects", String(id)));
+                projects = projects.filter(p => p.id !== id);
+                currentProjectId = projects.length > 0 ? projects[0].id : null;
+                closeCustomModal();
+                renderApp();
+            } catch (error) {
+                console.error("Lỗi xóa dự án:", error);
             }
         }
 
@@ -511,6 +683,7 @@
                 issue: '',
                 solution: ''
             });
+            logActivity(proj, 'Thêm công việc mới');
             await saveData();
             renderMainContent();
         }
@@ -535,6 +708,7 @@
                 } else {
                     task[field] = value;
                 }
+                logActivity(proj, `Cập nhật công việc [${task.name}] (${field})`);
                 await saveData();
             }
         }
@@ -580,6 +754,7 @@
             }
 
             proj.tasks = proj.tasks.filter(t => t.id !== taskId);
+            logActivity(proj, 'Xóa một công việc');
             await saveData();
             renderMainContent();
         }
@@ -602,6 +777,7 @@
                 const url = prompt("Nhập đường dẫn (URL) của tài liệu/link:");
                 if (url && url.trim() !== '') {
                     task.links.push({ id: Date.now(), title: title.trim(), url: url.trim() });
+                    logActivity(proj, `Thêm tài liệu vào công việc [${task.name}]`);
                     await saveData();
                     renderMainContent();
                 }
@@ -621,6 +797,7 @@
             const task = proj.tasks.find(t => t.id === taskId);
             if (task && task.links) {
                 task.links = task.links.filter(l => l.id !== linkId);
+                logActivity(proj, `Xóa tài liệu của công việc [${task.name}]`);
                 await saveData();
                 renderMainContent();
             }
@@ -999,6 +1176,10 @@
             let startInput = renderCustomDateInput(proj.startDate, `updateProjectInfo('startDate', this.value)`, `proj_start_${proj.id}`);
             let deadlineInput = renderCustomDateInput(proj.deadline, `updateProjectInfo('deadline', this.value)`, `proj_deadline_${proj.id}`);
 
+            // ĐẾM SỐ LƯỢNG YÊU CẦU CHỜ DUYỆT ĐỂ HIỂN THỊ BADGE ĐỎ TRÊN QUẢ CHUÔNG
+            let reqCount = (proj.requests && proj.requests.length > 0) ? proj.requests.length : 0;
+            let bellBadgeHtml = reqCount > 0 ? `<span class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">${reqCount}</span>` : '';
+
             mainEl.innerHTML = `
                 ${getAutocompleteDataList()}
                 <div class="bg-white border-b border-slate-200 p-4 md:p-6 shadow-sm">
@@ -1009,6 +1190,10 @@
                                 <input type="text" value="${proj.name}" onchange="updateProjectInfo('name', this.value)" class="w-full text-xl md:text-2xl font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none py-1">
                             </div>
                             <div class="flex items-center gap-2">
+                                <button onclick="openActivityLogModal()" class="relative bg-slate-100 hover:bg-slate-200 text-slate-700 w-10 h-10 rounded-xl shadow-sm transition flex items-center justify-center cursor-pointer" title="Nhật ký thay đổi & Yêu cầu cấp quyền">
+                                    <i class="fa-solid fa-bell text-sm"></i>
+                                    ${bellBadgeHtml}
+                                </button>
                                 <button onclick="exportProjectReport()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer"><i class="fa-solid fa-file-arrow-down"></i> Xuất Báo Cáo</button>
                             </div>
                         </div>
