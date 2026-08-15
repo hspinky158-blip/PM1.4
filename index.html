@@ -156,7 +156,7 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v8')) || {};
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v9')) || {};
 
         function showCustomModal(title, htmlContent, iconClass = 'fa-bell', customActions = null) {
             document.getElementById('modal-title').innerText = title;
@@ -251,7 +251,7 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v8', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v9', JSON.stringify(memberRegistry));
         }
 
         function logActivity(proj, actionText) {
@@ -372,9 +372,17 @@
             }
         }
 
-        function openActivityLogModal() {
+        // KHI BẤM VÀO QUẢ CHUÔNG: MỞ BẢNG THÔNG BÁO VÀ ĐÁNH DẤU ĐÃ XEM ĐỂ BIẾN MẤT SỐ ĐẾM
+        async function openActivityLogModal() {
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
+
+            // Đánh dấu đã xem toàn bộ yêu cầu hiện tại để ẩn số đếm
+            if (proj.requests && proj.requests.length > 0) {
+                proj.requests = proj.requests.map(r => ({ ...r, viewed: true }));
+                await saveData();
+                renderMainContent();
+            }
 
             const role = getUserProjectRole(proj);
             const isOwnerOrEditor = (role === 'owner' || role === 'editor');
@@ -404,7 +412,6 @@
             let requestsHtml = '';
             if (proj.requests && proj.requests.length > 0) {
                 proj.requests.forEach(req => {
-                    // CHỈ CHỦ DỰ ÁN HOẶC EDITOR MỚI THẤY NÚT DUYỆT NGAY. NGƯỜI XEM (VIEWER) SỐNG CHỈ THẤY TRẠNG THÁI CHỜ DUYỆT.
                     let approveBtn = isOwnerOrEditor ? `
                         <button onclick="approveRequest(${req.id})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition shrink-0 cursor-pointer">Duyệt ngay</button>
                     ` : `<span class="text-[10px] text-slate-400 italic">Đang chờ Chủ dự án duyệt</span>`;
@@ -1188,7 +1195,9 @@
             let startInput = renderCustomDateInput(proj.startDate, `updateProjectInfo('startDate', this.value)`, `proj_start_${proj.id}`);
             let deadlineInput = renderCustomDateInput(proj.deadline, `updateProjectInfo('deadline', this.value)`, `proj_deadline_${proj.id}`);
 
-            let reqCount = (proj.requests && proj.requests.length > 0) ? proj.requests.length : 0;
+            // Chỉ đếm các yêu cầu chưa được xem (chưa có thuộc tính viewed: true)
+            let unviewedRequests = (proj.requests || []).filter(r => !r.viewed);
+            let reqCount = unviewedRequests.length;
             let bellBadgeHtml = reqCount > 0 ? `<span class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">${reqCount}</span>` : '';
 
             mainEl.innerHTML = `
