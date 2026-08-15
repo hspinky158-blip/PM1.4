@@ -156,7 +156,7 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v11')) || {};
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v12')) || {};
 
         function showCustomModal(title, htmlContent, iconClass = 'fa-bell', customActions = null) {
             document.getElementById('modal-title').innerText = title;
@@ -251,7 +251,7 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v11', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v12', JSON.stringify(memberRegistry));
         }
 
         function logActivity(proj, actionText) {
@@ -393,28 +393,6 @@
             const role = getUserProjectRole(proj);
             const isOwnerOrEditor = (role === 'owner' || role === 'editor');
 
-            let activitiesHtml = '';
-            if (!proj.activities || proj.activities.length === 0) {
-                activitiesHtml = `<div class="text-center py-6 text-slate-400 text-xs italic">Chưa có hoạt động nào được ghi nhận.</div>`;
-            } else {
-                proj.activities.forEach(act => {
-                    activitiesHtml += `
-                        <div class="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-50 transition border-b border-slate-100 text-xs">
-                            <div class="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 font-bold text-[10px] mt-0.5">
-                                ${act.user.charAt(0).toUpperCase()}
-                            </div>
-                            <div class="flex-1">
-                                <div class="flex items-center justify-between">
-                                    <span class="font-bold text-slate-800">${act.user}</span>
-                                    <span class="text-[10px] text-slate-400"><i class="fa-regular fa-clock mr-1"></i>${act.time}</span>
-                                </div>
-                                <p class="text-slate-600 mt-0.5">${act.content}</p>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-
             let requestsHtml = '';
             if (proj.requests && proj.requests.length > 0) {
                 proj.requests.forEach(req => {
@@ -432,9 +410,11 @@
                         </div>
                     `;
                 });
+            } else {
+                requestsHtml = `<div class="text-center py-6 text-slate-400 text-xs italic">Không có yêu cầu cấp quyền nào đang chờ duyệt.</div>`;
             }
 
-            let clearAllBtn = ((proj.activities && proj.activities.length > 0) || (proj.requests && proj.requests.length > 0)) ? `
+            let clearAllBtn = (proj.requests && proj.requests.length > 0) ? `
                 <div class="flex justify-end mb-3">
                     <button onclick="clearAllNotifications()" class="text-red-500 hover:text-red-700 text-xs font-semibold flex items-center gap-1 cursor-pointer bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">
                         <i class="fa-solid fa-trash-can"></i> Xóa toàn bộ thông báo
@@ -445,22 +425,20 @@
             let htmlContent = `
                 <div class="w-full text-left space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                     ${clearAllBtn}
-                    ${requestsHtml ? `<div><h4 class="font-bold text-xs text-amber-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Yêu cầu cấp quyền chờ duyệt</h4><div class="space-y-1">${requestsHtml}</div></div>` : ''}
                     <div>
-                        <h4 class="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Nhật ký thay đổi theo thời gian thực</h4>
-                        <div class="space-y-1">${activitiesHtml}</div>
+                        <h4 class="font-bold text-xs text-amber-700 uppercase tracking-wider mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Yêu cầu cấp quyền chờ duyệt</h4>
+                        <div class="space-y-1">${requestsHtml}</div>
                     </div>
                 </div>
             `;
 
-            showCustomModal("Thông Báo & Hoạt Động Thời Gian Thực", htmlContent, "fa-bell", `<button onclick="closeCustomModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition w-full cursor-pointer">Đóng</button>`);
+            showCustomModal("Thông Báo Yêu Cầu Cấp Quyền", htmlContent, "fa-bell", `<button onclick="closeCustomModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition w-full cursor-pointer">Đóng</button>`);
         }
 
         async function clearAllNotifications() {
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
             
-            proj.activities = [];
             proj.requests = [];
             await saveData();
             renderMainContent();
@@ -1235,7 +1213,7 @@
                                 <input type="text" value="${proj.name}" onchange="updateProjectInfo('name', this.value)" class="w-full text-xl md:text-2xl font-bold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none py-1">
                             </div>
                             <div class="flex items-center gap-2">
-                                <button onclick="openActivityLogModal()" class="relative bg-slate-100 hover:bg-slate-200 text-slate-700 w-10 h-10 rounded-xl shadow-sm transition flex items-center justify-center cursor-pointer" title="Nhật ký thay đổi & Yêu cầu cấp quyền">
+                                <button onclick="openActivityLogModal()" class="relative bg-slate-100 hover:bg-slate-200 text-slate-700 w-10 h-10 rounded-xl shadow-sm transition flex items-center justify-center cursor-pointer" title="Yêu cầu cấp quyền">
                                     <i class="fa-solid fa-bell text-sm"></i>
                                     ${bellBadgeHtml}
                                 </button>
