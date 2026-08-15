@@ -3,7 +3,7 @@
   "dir": "ltr",
   "display": "standalone",
   "name": "hspinky158-blip.github",
-  "orientation": "portrait",
+  "orientation": "any",
   "scope": "/PM1.4/",
   "short_name": "hspinky158",
   "start_url": "/PM1.4/",
