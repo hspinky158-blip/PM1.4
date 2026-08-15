@@ -75,12 +75,12 @@
 <body class="bg-slate-50 text-slate-800 font-sans antialiased relative">
 
     <div id="custom-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 border border-slate-100 text-center animate-in fade-in zoom-in duration-200">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-100 text-center animate-in fade-in zoom-in duration-200">
             <div id="modal-icon-container" class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4 text-xl">
                 <i id="modal-icon" class="fa-solid fa-bell"></i>
             </div>
             <h3 id="modal-title" class="font-bold text-slate-900 text-base mb-2">Thông báo</h3>
-            <p id="modal-message" class="text-xs text-slate-600 mb-6 leading-relaxed">Nội dung thông báo...</p>
+            <div id="modal-message" class="text-xs text-slate-600 mb-6 leading-relaxed text-left">Nội dung thông báo...</div>
             <div id="modal-actions" class="flex gap-2 justify-center">
                 <button onclick="closeCustomModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition w-full cursor-pointer">Đã hiểu</button>
             </div>
@@ -158,9 +158,9 @@
 
         let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v6')) || {};
 
-        function showCustomModal(title, message, iconClass = 'fa-bell', customActions = null) {
+        function showCustomModal(title, htmlContent, iconClass = 'fa-bell', customActions = null) {
             document.getElementById('modal-title').innerText = title;
-            document.getElementById('modal-message').innerText = message;
+            document.getElementById('modal-message').innerHTML = htmlContent;
             document.getElementById('modal-icon').className = `fa-solid ${iconClass}`;
             
             const actionsEl = document.getElementById('modal-actions');
@@ -266,7 +266,6 @@
                 user: userName,
                 content: actionText
             });
-            // Giữ tối đa 50 hoạt động gần nhất
             if (proj.activities.length > 50) proj.activities.pop();
         }
 
@@ -335,7 +334,6 @@
             renderMainContent();
         }
 
-        // XỬ LÝ XIN CẤP QUYỀN CHO NGƯỜI XEM (VIEWER)
         function handleViewerAttemptEdit() {
             let actions = `
                 <div class="w-full space-y-3">
@@ -350,7 +348,8 @@
         }
 
         async function submitPermissionRequest() {
-            const reason = document.getElementById('request-reason').value || "Cần chỉnh sửa nội dung dự án";
+            const reasonInput = document.getElementById('request-reason');
+            const reason = reasonInput ? reasonInput.value || "Cần chỉnh sửa nội dung dự án" : "Cần chỉnh sửa nội dung dự án";
             const proj = projects.find(p => p.id === currentProjectId);
             if (proj) {
                 if (!proj.requests) proj.requests = [];
@@ -373,7 +372,6 @@
             }
         }
 
-        // MỞ BẢNG XEM NHẬT KÝ THAY ĐỔI & YÊU CẦU (BẤM VÀO HÌNH QUẢ CHUÔNG)
         function openActivityLogModal() {
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
@@ -1176,7 +1174,6 @@
             let startInput = renderCustomDateInput(proj.startDate, `updateProjectInfo('startDate', this.value)`, `proj_start_${proj.id}`);
             let deadlineInput = renderCustomDateInput(proj.deadline, `updateProjectInfo('deadline', this.value)`, `proj_deadline_${proj.id}`);
 
-            // ĐẾM SỐ LƯỢNG YÊU CẦU CHỜ DUYỆT ĐỂ HIỂN THỊ BADGE ĐỎ TRÊN QUẢ CHUÔNG
             let reqCount = (proj.requests && proj.requests.length > 0) ? proj.requests.length : 0;
             let bellBadgeHtml = reqCount > 0 ? `<span class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">${reqCount}</span>` : '';
 
