@@ -147,7 +147,6 @@
 
         function getEmailByNameOrInput(inputStr) {
             if (!inputStr) return '';
-            // Tách phần tên nếu có định dạng kèm vai trò như "Hà (chỉnh sửa)" hoặc "Hà - chỉnh sửa"
             let clean = inputStr.split('(')[0].split('-')[0].trim().toLowerCase();
             if (!clean) return '';
             for (let [name, email] of Object.entries(memberRegistry)) {
@@ -177,7 +176,6 @@
             return emailStr;
         }
 
-        // Kiểm tra quyền của user hiện tại (Owner, Editor hay Viewer)
         function getUserProjectRole(proj) {
             if (!window.currentUser) return 'viewer';
             const userEmail = window.currentUser.email.trim().toLowerCase();
@@ -185,7 +183,6 @@
             
             if (owner === userEmail) return 'owner';
 
-            // Kiểm tra trong chuỗi members (VD: "Hà (chỉnh sửa), Lan (xem)")
             if (proj.members) {
                 let items = proj.members.split(',').map(m => m.trim());
                 for (let item of items) {
