@@ -143,27 +143,35 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        // Sổ danh bạ lưu cấu trúc: { Tên: { email: '...', role: 'xem' / 'chinhsua' } }
-        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v2')) || {};
-        
-        // Tương thích ngược với định dạng cũ nếu có
-        for (let [k, v] of Object.entries(memberRegistry)) {
-            if (typeof v === 'string') {
-                memberRegistry[k] = { email: v, role: 'xem' };
+        let memberRegistry = JSON.parse(localStorage.getItem('hspinky_member_registry_v3')) || {};
+
+        function parseMemberInput(inputStr) {
+            if (!inputStr) return { name: '', email: '' };
+            let raw = inputStr.trim();
+            // Xử lý dạng "Tên (email)" hoặc "tên (EMAIL)"
+            let match = raw.match(/^(.*?)\s*\((.*?)\)$/);
+            if (match) {
+                return { name: match[1].trim(), email: match[2].trim().toLowerCase() };
             }
+            return { name: raw, email: '' };
         }
 
         function getEmailByNameOrInput(inputStr) {
             if (!inputStr) return '';
-            let clean = inputStr.split('(')[0].split('-')[0].trim().toLowerCase();
-            if (!clean) return '';
+            let parsed = parseMemberInput(inputStr);
+            let cleanName = parsed.name.toLowerCase();
+            let directEmail = parsed.email;
+
+            if (directEmail) return directEmail;
+
             for (let [name, data] of Object.entries(memberRegistry)) {
-                if (name.toLowerCase() === clean) return data.email;
+                if (name.toLowerCase() === cleanName) return data.email;
             }
+
             if (window.currentUser && window.currentUser.email) {
                 let currentEmail = window.currentUser.email.trim().toLowerCase();
                 let usernamePart = currentEmail.split('@')[0];
-                if (clean === usernamePart || clean === 'tôi' || clean === 'me') {
+                if (cleanName === usernamePart || cleanName === 'tôi' || cleanName === 'me') {
                     return currentEmail;
                 }
             }
@@ -194,10 +202,11 @@
             if (proj.members) {
                 let items = proj.members.split(',').map(m => m.trim());
                 for (let item of items) {
-                    let emailMapped = getEmailByNameOrInput(item);
+                    let parsed = parseMemberInput(item);
+                    let emailMapped = parsed.email || getEmailByNameOrInput(parsed.name);
+                    
                     if (emailMapped === userEmail) {
-                        // Kiểm tra trong danh bạ xem người này được phân quyền gì
-                        let cleanName = item.split('(')[0].split('-')[0].trim();
+                        let cleanName = parsed.name.toLowerCase();
                         if (memberRegistry[cleanName] && memberRegistry[cleanName].role === 'chinhsua') {
                             return 'editor';
                         }
@@ -208,11 +217,11 @@
         }
 
         function saveMemberRegistry() {
-            localStorage.setItem('hspinky_member_registry_v2', JSON.stringify(memberRegistry));
+            localStorage.setItem('hspinky_member_registry_v3', JSON.stringify(memberRegistry));
         }
 
         function addNewMemberFromPrompt() {
-            let name = prompt("Nhập tên thành viên (Ví dụ: Hà):");
+            let name = prompt("Nhập tên thành viên (Ví dụ: Hoàng):");
             if (!name || !name.trim()) return;
             let email = prompt(`Nhập email tương ứng cho thành viên [${name.trim()}]:`);
             if (!email || !email.trim()) return;
@@ -640,7 +649,7 @@
                 item.className = `group flex items-center justify-between p-2.5 md:p-3 rounded-xl cursor-pointer transition ${isActive ? 'bg-indigo-50 text-indigo-900 font-semibold shadow-sm' : 'hover:bg-slate-100 text-slate-600'}`;
                 item.onclick = () => { currentProjectId = proj.id; renderApp(); };
 
-                // ẨN NHÃN CHỦ DỰ ÁN Ở THANH BÊN TRÁI THEO YÊU CẦU
+                // ẨN HOÀN TOÀN NHÃN CHỦ DỰ ÁN VÀ XEM Ở THANH BÊN TRÁI
                 item.innerHTML = `
                     <div class="truncate flex-1 pr-2">
                         <div class="text-xs md:text-sm font-medium truncate flex items-center gap-1">
@@ -963,7 +972,7 @@
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-2">
-                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label><input type="text" value="${proj.members || ''}" list="member-suggestions" ${disProjAttr} onchange="updateProjectInfo('members', this.value)" placeholder="Gõ tên thành viên..." class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
+                            <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-users"></i> Thành viên hiển thị</label><input type="text" value="${proj.members || ''}" list="member-suggestions" ${disProjAttr} onchange="updateProjectInfo('members', this.value)" placeholder="VD: Hoàng (prodoggy2@gmail.com), Hà" class="w-full text-xs md:text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"></div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Ngày bắt đầu</label>${startInput}</div>
                             <div><label class="text-[11px] font-semibold text-slate-400 uppercase flex items-center gap-1 mb-1"><i class="fa-solid fa-calendar-days"></i> Deadline tổng</label>${deadlineInput}</div>
                         </div>
