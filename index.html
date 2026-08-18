@@ -171,14 +171,10 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        let sharedResources = JSON.parse(localStorage.getItem('hspinky_shared_resources_v2')) || {
-            guidelines: [
-                { id: 1, title: 'Quy trình nghiệm thu vật liệu 2026', url: '#', desc: 'Kiểm định chất lượng sắt thép, thiết bị vệ sinh trước khi lắp đặt.' },
-                { id: 2, title: 'Quy chế duyệt TVC & Hình ảnh Marketing', url: '#', desc: 'Các bước qua các version trước khi xuất Final.' }
-            ],
-            notes: [
-                { id: 1, title: 'Recap cuộc họp chiến lược MIK tháng 8/2026', content: 'Thống nhất đẩy mạnh content TikTok và 3D walkthrough cho khu thấp tầng.' }
-            ]
+        // Để trống hoàn toàn không có dữ liệu mẫu
+        let sharedResources = JSON.parse(localStorage.getItem('hspinky_shared_resources_v3')) || {
+            guidelines: [],
+            notes: []
         };
 
         let undoStack = [];
@@ -222,14 +218,14 @@
                         if (redoStack.length > 0) {
                             undoStack.push(JSON.parse(JSON.stringify(sharedResources)));
                             sharedResources = redoStack.pop();
-                            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
+                            localStorage.setItem('hspinky_shared_resources_v3', JSON.stringify(sharedResources));
                             renderMainContent();
                         }
                     } else {
                         if (undoStack.length > 0) {
                             redoStack.push(JSON.parse(JSON.stringify(sharedResources)));
                             sharedResources = undoStack.pop();
-                            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
+                            localStorage.setItem('hspinky_shared_resources_v3', JSON.stringify(sharedResources));
                             renderMainContent();
                         }
                     }
@@ -802,7 +798,7 @@
                 const content = prompt("Nhập nội dung recap/note:");
                 sharedResources.notes.push({ id: Date.now(), title, content: content || '' });
             }
-            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
+            localStorage.setItem('hspinky_shared_resources_v3', JSON.stringify(sharedResources));
             renderMainContent();
         }
 
@@ -815,7 +811,7 @@
                 let item = sharedResources.notes.find(n => n.id === id);
                 if (item) item[field] = value;
             }
-            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
+            localStorage.setItem('hspinky_shared_resources_v3', JSON.stringify(sharedResources));
         }
 
         function deleteSharedItem(type, id) {
@@ -825,7 +821,7 @@
             } else if (type === 'note') {
                 sharedResources.notes = sharedResources.notes.filter(n => n.id !== id);
             }
-            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
+            localStorage.setItem('hspinky_shared_resources_v3', JSON.stringify(sharedResources));
             renderMainContent();
         }
 
@@ -1153,7 +1149,7 @@
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
                                 <table class="w-full text-left border-collapse min-w-[700px]">
                                     <thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Tên tài liệu / quy trình</th><th class="p-3">Đường dẫn file (URL)</th><th class="p-3">Mô tả chi tiết</th><th class="p-3 text-center">Xóa</th></tr></thead>
-                                    <tbody>${guidelinesHtml || '<tr><td colspan="4" class="text-center py-4 text-xs text-slate-400 italic">Chưa có tài liệu nào.</td></tr>'}</tbody>
+                                    <tbody>${guidelinesHtml || '<tr><td colspan="4" class="text-center py-6 text-xs text-slate-400 italic">Chưa có tài liệu nào. Bấm nút "Thêm Tài Liệu" ở trên để tạo mới.</td></tr>'}</tbody>
                                 </table>
                             </div>
                         </div>
@@ -1164,7 +1160,7 @@
                                 <button onclick="addSharedItem('note')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"><i class="fa-solid fa-plus"></i> Tạo Bảng Note</button>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                ${notesHtml || '<div class="col-span-2 text-center py-6 text-xs text-slate-400 italic bg-white rounded-2xl border border-slate-200">Chưa có bảng note hoặc recap nào.</div>'}
+                                ${notesHtml || '<div class="col-span-2 text-center py-8 text-xs text-slate-400 italic bg-white rounded-2xl border border-slate-200 shadow-sm">Chưa có bảng note hoặc recap nào. Bấm nút "Tạo Bảng Note" ở trên để bắt đầu.</div>'}
                             </div>
                         </div>
                     </div>
