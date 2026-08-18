@@ -71,7 +71,6 @@
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         
-        /* Tùy chỉnh textarea co giãn và thanh cuộn ngang */
         textarea.auto-resize {
             resize: both;
             overflow: auto;
@@ -117,15 +116,22 @@
                         <img id="user-avatar" src="" class="w-7 h-7 rounded-full border border-slate-200 object-cover" alt="Avatar">
                         <span id="user-name" class="font-bold text-xs md:text-sm text-slate-800 truncate">User</span>
                     </div>
-                    <button onclick="window.signOut(window.auth)" class="text-slate-400 hover:text-red-500 p-1.5 rounded-lg transition cursor-pointer" title="Đăng xuất">
-                        <i class="fa-solid fa-right-from-bracket text-sm"></i>
-                    </button>
+                    <div class="flex items-center gap-1">
+                        <button onclick="switchGlobalWorkspace('resources')" class="w-8 h-8 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition cursor-pointer" title="Kho tài nguyên & Ghi chú chung">
+                            <i class="fa-solid fa-arrow-right text-xs"></i>
+                        </button>
+                        <button onclick="window.signOut(window.auth)" class="text-slate-400 hover:text-red-500 p-1.5 rounded-lg transition cursor-pointer" title="Đăng xuất">
+                            <i class="fa-solid fa-right-from-bracket text-sm"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <h2 class="font-bold text-xs uppercase text-slate-500 tracking-wider">Dự án của tôi</h2>
-                    <button onclick="addNewProject()" class="bg-indigo-600 hover:bg-indigo-700 text-white w-7 h-7 rounded-full flex items-center justify-center transition shadow-sm cursor-pointer" title="Thêm dự án mới">
-                        <i class="fa-solid fa-plus text-xs"></i>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <h2 class="font-bold text-xs uppercase text-slate-500 tracking-wider">Dự án của tôi</h2>
+                        <button onclick="addNewProject()" class="bg-indigo-600 hover:bg-indigo-700 text-white w-6 h-6 rounded-full flex items-center justify-center transition shadow-sm cursor-pointer" title="Thêm dự án mới">
+                            <i class="fa-solid fa-plus text-[10px]"></i>
+                        </button>
+                    </div>
                 </div>
                 <div id="project-list" class="p-2 space-y-1 overflow-y-auto max-h-32 md:max-h-[calc(100vh-190px)]">
                     <div class="text-center py-4 text-slate-400 text-xs">Đang tải dữ liệu...</div>
@@ -156,6 +162,7 @@
 
         let projects = [];
         let currentProjectId = null;
+        let currentViewMode = 'project'; // 'project' hoặc 'resources'
         let currentTab = 'tasks';
         let taskViewMode = 'table';
         
@@ -164,46 +171,72 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        // Hệ thống lịch sử Undo / Redo
+        // Shared Workspace Data (Lưu tài nguyên chung và ghi chú recap)
+        let sharedResources = JSON.parse(localStorage.getItem('hspinky_shared_resources_v1')) || {
+            partners: [
+                { id: 1, name: 'Đơn vị thiết kế 3D Alpha', contact: 'alpha@design.vn', note: 'Chuyên dựng phối cảnh resort, chung cư.' },
+                { id: 2, name: 'Xưởng in ấn & Quảng cáo Beta', contact: 'beta@print.vn', note: 'Cung cấp standee, backdrop hội nghị.' }
+            ],
+            guidelines: [
+                { id: 1, title: 'Quy trình nghiệm thu vật liệu 2026', url: '#', desc: 'Kiểm định chất lượng sắt thép, thiết bị vệ sinh trước khi lắp đặt.' },
+                { id: 2, title: 'Quy chế duyệt TVC & Hình ảnh Marketing', url: '#', desc: 'Các bước qua các version trước khi xuất Final.' }
+            ],
+            notes: [
+                { id: 1, title: 'Recap cuộc họp chiến lược MIK tháng 8/2026', content: 'Thống nhất đẩy mạnh content TikTok và 3D walkthrough cho khu thấp tầng.' }
+            ]
+        };
+
         let undoStack = [];
         let redoStack = [];
 
         function pushHistory() {
-            const proj = projects.find(p => p.id === currentProjectId);
-            if (!proj) return;
-            undoStack.push(JSON.parse(JSON.stringify(proj)));
-            if (undoStack.length > 20) undoStack.shift(); // Giới hạn 20 bước
-            redoStack = []; // Xóa redo stack khi có hành động mới
+            if (currentViewMode === 'project') {
+                const proj = projects.find(p => p.id === currentProjectId);
+                if (!proj) return;
+                undoStack.push(JSON.parse(JSON.stringify(proj)));
+            } else {
+                undoStack.push(JSON.parse(JSON.stringify(sharedResources)));
+            }
+            if (undoStack.length > 20) undoStack.shift();
+            redoStack = [];
         }
 
         window.addEventListener('keydown', async (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-                // Kiểm tra xem đang focus trong textarea hoặc input nào không để tránh xung đột
-                const activeEl = document.activeElement;
-                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') && activeEl.type !== 'date' && !activeEl.classList.contains('allow-global-undo')) {
-                    // Nếu đang gõ text bình thường trong ô thì để trình duyệt tự xử lý undo của ô đó nếu muốn, 
-                    // hoặc nếu muốn undo toàn bộ dự án thì bỏ qua điều kiện này. Ở đây ta hỗ trợ Global Undo cho dự án.
-                }
-
                 e.preventDefault();
-                const projIndex = projects.findIndex(p => p.id === currentProjectId);
-                if (projIndex === -1) return;
-
-                if (e.shiftKey) {
-                    // Redo (Ctrl + Shift + Z)
-                    if (redoStack.length > 0) {
-                        undoStack.push(JSON.parse(JSON.stringify(projects[projIndex])));
-                        projects[projIndex] = redoStack.pop();
-                        await saveDataWithoutPush();
-                        renderMainContent();
+                if (currentViewMode === 'project') {
+                    const projIndex = projects.findIndex(p => p.id === currentProjectId);
+                    if (projIndex === -1) return;
+                    if (e.shiftKey) {
+                        if (redoStack.length > 0) {
+                            undoStack.push(JSON.parse(JSON.stringify(projects[projIndex])));
+                            projects[projIndex] = redoStack.pop();
+                            await saveDataWithoutPush();
+                            renderMainContent();
+                        }
+                    } else {
+                        if (undoStack.length > 0) {
+                            redoStack.push(JSON.parse(JSON.stringify(projects[projIndex])));
+                            projects[projIndex] = undoStack.pop();
+                            await saveDataWithoutPush();
+                            renderMainContent();
+                        }
                     }
                 } else {
-                    // Undo (Ctrl + Z)
-                    if (undoStack.length > 0) {
-                        redoStack.push(JSON.parse(JSON.stringify(projects[projIndex])));
-                        projects[projIndex] = undoStack.pop();
-                        await saveDataWithoutPush();
-                        renderMainContent();
+                    if (e.shiftKey) {
+                        if (redoStack.length > 0) {
+                            undoStack.push(JSON.parse(JSON.stringify(sharedResources)));
+                            sharedResources = redoStack.pop();
+                            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+                            renderMainContent();
+                        }
+                    } else {
+                        if (undoStack.length > 0) {
+                            redoStack.push(JSON.parse(JSON.stringify(sharedResources)));
+                            sharedResources = undoStack.pop();
+                            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+                            renderMainContent();
+                        }
                     }
                 }
             }
@@ -677,6 +710,7 @@
             logActivity(newProj, 'Đã tạo dự án mới');
             projects.push(newProj);
             currentProjectId = newProj.id;
+            currentViewMode = 'project';
             undoStack = [];
             redoStack = [];
             await saveData();
@@ -751,6 +785,67 @@
             renderMainContent();
         }
 
+        function switchGlobalWorkspace(mode) {
+            currentViewMode = mode;
+            undoStack = [];
+            redoStack = [];
+            renderProjectList();
+            renderMainContent();
+        }
+
+        // --- HÀM XỬ LÝ KHÔNG GIAN TÀI NGUYÊN & GHI CHÚ CHUNG ---
+        function addSharedItem(type) {
+            pushHistory();
+            if (type === 'partner') {
+                const name = prompt("Nhập tên Đối tác / Partner:");
+                if (!name) return;
+                const contact = prompt("Nhập email hoặc số điện thoại liên hệ:");
+                const note = prompt("Nhập ghi chú chi tiết:");
+                sharedResources.partners.push({ id: Date.now(), name, contact: contact || '', note: note || '' });
+            } else if (type === 'guideline') {
+                const title = prompt("Nhập tên quy định / tài liệu chung:");
+                if (!title) return;
+                const url = prompt("Nhập đường dẫn URL tài liệu (nếu có):");
+                const desc = prompt("Nhập mô tả ngắn:");
+                sharedResources.guidelines.push({ id: Date.now(), title, url: url || '#', desc: desc || '' });
+            } else if (type === 'note') {
+                const title = prompt("Nhập tiêu đề bảng ghi chú / recap:");
+                if (!title) return;
+                const content = prompt("Nhập nội dung recap/note:");
+                sharedResources.notes.push({ id: Date.now(), title, content: content || '' });
+            }
+            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+            renderMainContent();
+        }
+
+        function updateSharedItem(type, id, field, value) {
+            pushHistory();
+            if (type === 'partner') {
+                let item = sharedResources.partners.find(p => p.id === id);
+                if (item) item[field] = value;
+            } else if (type === 'guideline') {
+                let item = sharedResources.guidelines.find(g => g.id === id);
+                if (item) item[field] = value;
+            } else if (type === 'note') {
+                let item = sharedResources.notes.find(n => n.id === id);
+                if (item) item[field] = value;
+            }
+            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+        }
+
+        function deleteSharedItem(type, id) {
+            pushHistory();
+            if (type === 'partner') {
+                sharedResources.partners = sharedResources.partners.filter(p => p.id !== id);
+            } else if (type === 'guideline') {
+                sharedResources.guidelines = sharedResources.guidelines.filter(g => g.id !== id);
+            } else if (type === 'note') {
+                sharedResources.notes = sharedResources.notes.filter(n => n.id !== id);
+            }
+            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+            renderMainContent();
+        }
+
         async function addNewTask() {
             const proj = projects.find(p => p.id === currentProjectId);
             if (!proj) return;
@@ -797,7 +892,6 @@
 
             const task = proj.tasks.find(t => t.id === taskId);
             if (task) {
-                // Kiểm tra xem giá trị có thực sự thay đổi không để tránh đẩy lịch sử rỗng
                 let oldVal = task[field];
                 let newVal = field === 'cost' ? (parseFloat(value) || 0) : value;
                 if (field === 'assignee') newVal = getEmailByNameOrInput(value);
@@ -956,8 +1050,17 @@
             const listEl = document.getElementById('project-list');
             listEl.innerHTML = '';
 
+            if (currentViewMode === 'resources') {
+                const resItem = document.createElement('div');
+                resItem.className = `flex items-center justify-between p-2.5 md:p-3 rounded-xl cursor-pointer transition bg-indigo-600 text-white font-semibold shadow-sm`;
+                resItem.innerHTML = `<div class="truncate flex-1 pr-2 text-xs md:text-sm flex items-center gap-2"><i class="fa-solid fa-folder-open"></i> Tài nguyên & Ghi chú chung</div>`;
+                listEl.appendChild(resItem);
+            }
+
             if (!projects || projects.length === 0) {
-                listEl.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs px-2">Chưa có dự án nào. Bấm nút <b>+</b> phía trên để tạo mới.</div>`;
+                if (currentViewMode !== 'resources') {
+                    listEl.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs px-2">Chưa có dự án nào.</div>`;
+                }
                 return;
             }
 
@@ -965,7 +1068,7 @@
             const userEmail = window.currentUser.email.trim().toLowerCase();
 
             projects.forEach(proj => {
-                const isActive = proj.id === currentProjectId;
+                const isActive = (currentViewMode === 'project' && proj.id === currentProjectId);
                 let projDueCount = 0;
                 if (proj.tasks) {
                     proj.tasks.forEach(t => { 
@@ -980,6 +1083,7 @@
                 item.className = `group flex items-center justify-between p-2.5 md:p-3 rounded-xl cursor-pointer transition ${isActive ? 'bg-indigo-50 text-indigo-900 font-semibold shadow-sm' : 'hover:bg-slate-100 text-slate-600'}`;
                 item.onclick = () => { 
                     currentProjectId = proj.id; 
+                    currentViewMode = 'project';
                     undoStack = []; 
                     redoStack = []; 
                     renderApp(); 
@@ -1020,6 +1124,96 @@
 
         function renderMainContent() {
             const mainEl = document.getElementById('main-content');
+
+            if (currentViewMode === 'resources') {
+                let partnersHtml = '';
+                sharedResources.partners.forEach(p => {
+                    partnersHtml += `
+                        <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-xs md:text-sm">
+                            <td class="p-3"><textarea rows="1" onchange="updateSharedItem('partner', ${p.id}, 'name', this.value)" class="w-full bg-transparent border border-slate-200 rounded-lg p-1.5 focus:border-indigo-600 focus:outline-none font-medium auto-resize">${p.name}</textarea></td>
+                            <td class="p-3"><input type="text" value="${p.contact}" onchange="updateSharedItem('partner', ${p.id}, 'contact', this.value)" class="w-full bg-transparent border border-slate-200 rounded-lg p-1.5 focus:border-indigo-600 focus:outline-none text-slate-600 text-xs"></td>
+                            <td class="p-3"><textarea rows="1" onchange="updateSharedItem('partner', ${p.id}, 'note', this.value)" class="w-full bg-slate-50 p-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 auto-resize">${p.note}</textarea></td>
+                            <td class="p-3 text-center"><button onclick="deleteSharedItem('partner', ${p.id})" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash-can text-xs"></i></button></td>
+                        </tr>
+                    `;
+                });
+
+                let guidelinesHtml = '';
+                sharedResources.guidelines.forEach(g => {
+                    guidelinesHtml += `
+                        <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-xs md:text-sm">
+                            <td class="p-3"><textarea rows="1" onchange="updateSharedItem('guideline', ${g.id}, 'title', this.value)" class="w-full bg-transparent border border-slate-200 rounded-lg p-1.5 focus:border-indigo-600 focus:outline-none font-medium auto-resize">${g.title}</textarea></td>
+                            <td class="p-3"><input type="text" value="${g.url}" onchange="updateSharedItem('guideline', ${g.id}, 'url', this.value)" class="w-full bg-transparent border border-slate-200 rounded-lg p-1.5 focus:border-indigo-600 focus:outline-none text-indigo-600 text-xs underline"></td>
+                            <td class="p-3"><textarea rows="1" onchange="updateSharedItem('guideline', ${g.id}, 'desc', this.value)" class="w-full bg-slate-50 p-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 auto-resize">${g.desc}</textarea></td>
+                            <td class="p-3 text-center"><button onclick="deleteSharedItem('guideline', ${g.id})" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash-can text-xs"></i></button></td>
+                        </tr>
+                    `;
+                });
+
+                let notesHtml = '';
+                sharedResources.notes.forEach(n => {
+                    notesHtml += `
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                            <div class="flex items-center justify-between">
+                                <input type="text" value="${n.title}" onchange="updateSharedItem('note', ${n.id}, 'title', this.value)" class="font-bold text-sm text-indigo-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-600 focus:outline-none flex-1 mr-2">
+                                <button onclick="deleteSharedItem('note', ${n.id})" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                            </div>
+                            <textarea rows="3" onchange="updateSharedItem('note', ${n.id}, 'content', this.value)" placeholder="Nhập ghi chú hoặc recap..." class="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700 focus:border-indigo-600 focus:outline-none auto-resize">${n.content}</textarea>
+                        </div>
+                    `;
+                });
+
+                mainEl.innerHTML = `
+                    <div class="bg-white border-b border-slate-200 p-4 md:p-6 shadow-sm flex items-center justify-between">
+                        <div>
+                            <h1 class="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-folder-open text-indigo-600"></i> Kho Tài Nguyên & Ghi Chú Chung Công Ty</h1>
+                            <p class="text-xs text-slate-500 mt-0.5">Quản lý file partner, quy định nghiệm thu, và các bảng recap chung.</p>
+                        </div>
+                        <button onclick="switchGlobalWorkspace('project')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer flex items-center gap-2">
+                            <i class="fa-solid fa-arrow-left"></i> Quay lại Dự án
+                        </button>
+                    </div>
+                    <div class="p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="font-bold text-sm text-slate-800 uppercase tracking-wider"><i class="fa-solid fa-handshake mr-1.5 text-indigo-600"></i> Danh Sách Partner / Nhà Cung Cấp</h3>
+                                <button onclick="addSharedItem('partner')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"><i class="fa-solid fa-plus"></i> Thêm Partner</button>
+                            </div>
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                                <table class="w-full text-left border-collapse min-w-[700px]">
+                                    <thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Tên đối tác</th><th class="p-3">Liên hệ (Email/SĐT)</th><th class="p-3">Ghi chú dịch vụ</th><th class="p-3 text-center">Xóa</th></tr></thead>
+                                    <tbody>${partnersHtml || '<tr><td colspan="4" class="text-center py-4 text-xs text-slate-400 italic">Chưa có partner nào.</td></tr>'}</tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="font-bold text-sm text-slate-800 uppercase tracking-wider"><i class="fa-solid fa-book mr-1.5 text-indigo-600"></i> Quy Định & Quy Trình Nghiệm Thu</h3>
+                                <button onclick="addSharedItem('guideline')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"><i class="fa-solid fa-plus"></i> Thêm Quy Định</button>
+                            </div>
+                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                                <table class="w-full text-left border-collapse min-w-[700px]">
+                                    <thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Tên tài liệu / quy định</th><th class="p-3">Đường dẫn file (URL)</th><th class="p-3">Mô tả chi tiết</th><th class="p-3 text-center">Xóa</th></tr></thead>
+                                    <tbody>${guidelinesHtml || '<tr><td colspan="4" class="text-center py-4 text-xs text-slate-400 italic">Chưa có tài liệu nào.</td></tr>'}</tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="font-bold text-sm text-slate-800 uppercase tracking-wider"><i class="fa-solid fa-note-sticky mr-1.5 text-indigo-600"></i> Bảng Lưu Note & Recap Chung</h3>
+                                <button onclick="addSharedItem('note')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"><i class="fa-solid fa-plus"></i> Tạo Bảng Note</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${notesHtml || '<div class="col-span-2 text-center py-6 text-xs text-slate-400 italic bg-white rounded-2xl border border-slate-200">Chưa có bảng note hoặc recap nào.</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
             const proj = projects.find(p => p.id === currentProjectId);
 
             if (!proj) {
