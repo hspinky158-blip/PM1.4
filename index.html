@@ -162,7 +162,7 @@
 
         let projects = [];
         let currentProjectId = null;
-        let currentViewMode = 'project'; // 'project' hoặc 'resources'
+        let currentViewMode = 'project';
         let currentTab = 'tasks';
         let taskViewMode = 'table';
         
@@ -171,12 +171,7 @@
         let filterDeadline = '';
         let memberSearchKeyword = '';
 
-        // Shared Workspace Data (Lưu tài nguyên chung và ghi chú recap)
-        let sharedResources = JSON.parse(localStorage.getItem('hspinky_shared_resources_v1')) || {
-            partners: [
-                { id: 1, name: 'Đơn vị thiết kế 3D Alpha', contact: 'alpha@design.vn', note: 'Chuyên dựng phối cảnh resort, chung cư.' },
-                { id: 2, name: 'Xưởng in ấn & Quảng cáo Beta', contact: 'beta@print.vn', note: 'Cung cấp standee, backdrop hội nghị.' }
-            ],
+        let sharedResources = JSON.parse(localStorage.getItem('hspinky_shared_resources_v2')) || {
             guidelines: [
                 { id: 1, title: 'Quy trình nghiệm thu vật liệu 2026', url: '#', desc: 'Kiểm định chất lượng sắt thép, thiết bị vệ sinh trước khi lắp đặt.' },
                 { id: 2, title: 'Quy chế duyệt TVC & Hình ảnh Marketing', url: '#', desc: 'Các bước qua các version trước khi xuất Final.' }
@@ -227,14 +222,14 @@
                         if (redoStack.length > 0) {
                             undoStack.push(JSON.parse(JSON.stringify(sharedResources)));
                             sharedResources = redoStack.pop();
-                            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+                            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
                             renderMainContent();
                         }
                     } else {
                         if (undoStack.length > 0) {
                             redoStack.push(JSON.parse(JSON.stringify(sharedResources)));
                             sharedResources = undoStack.pop();
-                            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+                            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
                             renderMainContent();
                         }
                     }
@@ -793,17 +788,10 @@
             renderMainContent();
         }
 
-        // --- HÀM XỬ LÝ KHÔNG GIAN TÀI NGUYÊN & GHI CHÚ CHUNG ---
         function addSharedItem(type) {
             pushHistory();
-            if (type === 'partner') {
-                const name = prompt("Nhập tên Đối tác / Partner:");
-                if (!name) return;
-                const contact = prompt("Nhập email hoặc số điện thoại liên hệ:");
-                const note = prompt("Nhập ghi chú chi tiết:");
-                sharedResources.partners.push({ id: Date.now(), name, contact: contact || '', note: note || '' });
-            } else if (type === 'guideline') {
-                const title = prompt("Nhập tên quy định / tài liệu chung:");
+            if (type === 'guideline') {
+                const title = prompt("Nhập tên quy trình / tài liệu chung:");
                 if (!title) return;
                 const url = prompt("Nhập đường dẫn URL tài liệu (nếu có):");
                 const desc = prompt("Nhập mô tả ngắn:");
@@ -814,35 +802,30 @@
                 const content = prompt("Nhập nội dung recap/note:");
                 sharedResources.notes.push({ id: Date.now(), title, content: content || '' });
             }
-            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
             renderMainContent();
         }
 
         function updateSharedItem(type, id, field, value) {
             pushHistory();
-            if (type === 'partner') {
-                let item = sharedResources.partners.find(p => p.id === id);
-                if (item) item[field] = value;
-            } else if (type === 'guideline') {
+            if (type === 'guideline') {
                 let item = sharedResources.guidelines.find(g => g.id === id);
                 if (item) item[field] = value;
             } else if (type === 'note') {
                 let item = sharedResources.notes.find(n => n.id === id);
                 if (item) item[field] = value;
             }
-            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
         }
 
         function deleteSharedItem(type, id) {
             pushHistory();
-            if (type === 'partner') {
-                sharedResources.partners = sharedResources.partners.filter(p => p.id !== id);
-            } else if (type === 'guideline') {
+            if (type === 'guideline') {
                 sharedResources.guidelines = sharedResources.guidelines.filter(g => g.id !== id);
             } else if (type === 'note') {
                 sharedResources.notes = sharedResources.notes.filter(n => n.id !== id);
             }
-            localStorage.setItem('hspinky_shared_resources_v1', JSON.stringify(sharedResources));
+            localStorage.setItem('hspinky_shared_resources_v2', JSON.stringify(sharedResources));
             renderMainContent();
         }
 
@@ -1053,7 +1036,7 @@
             if (currentViewMode === 'resources') {
                 const resItem = document.createElement('div');
                 resItem.className = `flex items-center justify-between p-2.5 md:p-3 rounded-xl cursor-pointer transition bg-indigo-600 text-white font-semibold shadow-sm`;
-                resItem.innerHTML = `<div class="truncate flex-1 pr-2 text-xs md:text-sm flex items-center gap-2"><i class="fa-solid fa-folder-open"></i> Tài nguyên & Ghi chú chung</div>`;
+                resItem.innerHTML = `<div class="truncate flex-1 pr-2 text-xs md:text-sm flex items-center gap-2"><i class="fa-solid fa-folder-open"></i> Quy Trình & Tài Liệu Chung</div>`;
                 listEl.appendChild(resItem);
             }
 
@@ -1126,18 +1109,6 @@
             const mainEl = document.getElementById('main-content');
 
             if (currentViewMode === 'resources') {
-                let partnersHtml = '';
-                sharedResources.partners.forEach(p => {
-                    partnersHtml += `
-                        <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-xs md:text-sm">
-                            <td class="p-3"><textarea rows="1" onchange="updateSharedItem('partner', ${p.id}, 'name', this.value)" class="w-full bg-transparent border border-slate-200 rounded-lg p-1.5 focus:border-indigo-600 focus:outline-none font-medium auto-resize">${p.name}</textarea></td>
-                            <td class="p-3"><input type="text" value="${p.contact}" onchange="updateSharedItem('partner', ${p.id}, 'contact', this.value)" class="w-full bg-transparent border border-slate-200 rounded-lg p-1.5 focus:border-indigo-600 focus:outline-none text-slate-600 text-xs"></td>
-                            <td class="p-3"><textarea rows="1" onchange="updateSharedItem('partner', ${p.id}, 'note', this.value)" class="w-full bg-slate-50 p-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 auto-resize">${p.note}</textarea></td>
-                            <td class="p-3 text-center"><button onclick="deleteSharedItem('partner', ${p.id})" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash-can text-xs"></i></button></td>
-                        </tr>
-                    `;
-                });
-
                 let guidelinesHtml = '';
                 sharedResources.guidelines.forEach(g => {
                     guidelinesHtml += `
@@ -1166,8 +1137,8 @@
                 mainEl.innerHTML = `
                     <div class="bg-white border-b border-slate-200 p-4 md:p-6 shadow-sm flex items-center justify-between">
                         <div>
-                            <h1 class="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-folder-open text-indigo-600"></i> Kho Tài Nguyên & Ghi Chú Chung Công Ty</h1>
-                            <p class="text-xs text-slate-500 mt-0.5">Quản lý file partner, quy định nghiệm thu, và các bảng recap chung.</p>
+                            <h1 class="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-folder-open text-indigo-600"></i> Quy Trình, Tài Liệu & Ghi Chú Chung</h1>
+                            <p class="text-xs text-slate-500 mt-0.5">Quản lý quy trình nghiệm thu, tài liệu chung và các bảng recap.</p>
                         </div>
                         <button onclick="switchGlobalWorkspace('project')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-4 py-2.5 rounded-xl transition cursor-pointer flex items-center gap-2">
                             <i class="fa-solid fa-arrow-left"></i> Quay lại Dự án
@@ -1176,25 +1147,12 @@
                     <div class="p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6">
                         <div>
                             <div class="flex items-center justify-between mb-3">
-                                <h3 class="font-bold text-sm text-slate-800 uppercase tracking-wider"><i class="fa-solid fa-handshake mr-1.5 text-indigo-600"></i> Danh Sách Partner / Nhà Cung Cấp</h3>
-                                <button onclick="addSharedItem('partner')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"><i class="fa-solid fa-plus"></i> Thêm Partner</button>
+                                <h3 class="font-bold text-sm text-slate-800 uppercase tracking-wider"><i class="fa-solid fa-book mr-1.5 text-indigo-600"></i> Quy Trình & Tài Liệu</h3>
+                                <button onclick="addSharedItem('guideline')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"><i class="fa-solid fa-plus"></i> Thêm Tài Liệu</button>
                             </div>
                             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
                                 <table class="w-full text-left border-collapse min-w-[700px]">
-                                    <thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Tên đối tác</th><th class="p-3">Liên hệ (Email/SĐT)</th><th class="p-3">Ghi chú dịch vụ</th><th class="p-3 text-center">Xóa</th></tr></thead>
-                                    <tbody>${partnersHtml || '<tr><td colspan="4" class="text-center py-4 text-xs text-slate-400 italic">Chưa có partner nào.</td></tr>'}</tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div>
-                            <div class="flex items-center justify-between mb-3">
-                                <h3 class="font-bold text-sm text-slate-800 uppercase tracking-wider"><i class="fa-solid fa-book mr-1.5 text-indigo-600"></i> Quy Định & Quy Trình Nghiệm Thu</h3>
-                                <button onclick="addSharedItem('guideline')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"><i class="fa-solid fa-plus"></i> Thêm Quy Định</button>
-                            </div>
-                            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-                                <table class="w-full text-left border-collapse min-w-[700px]">
-                                    <thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Tên tài liệu / quy định</th><th class="p-3">Đường dẫn file (URL)</th><th class="p-3">Mô tả chi tiết</th><th class="p-3 text-center">Xóa</th></tr></thead>
+                                    <thead><tr class="bg-slate-50 border-b text-xs uppercase text-slate-500"><th class="p-3">Tên tài liệu / quy trình</th><th class="p-3">Đường dẫn file (URL)</th><th class="p-3">Mô tả chi tiết</th><th class="p-3 text-center">Xóa</th></tr></thead>
                                     <tbody>${guidelinesHtml || '<tr><td colspan="4" class="text-center py-4 text-xs text-slate-400 italic">Chưa có tài liệu nào.</td></tr>'}</tbody>
                                 </table>
                             </div>
